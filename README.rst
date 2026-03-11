@@ -1,7 +1,10 @@
 =================
 ColTable
 =================
-
+Project can be found here
+`WongJeYi <https://github.com/WongJeYi>`__ for
+   `ColTable <WongJeYi/ColTable/README.rst>`__:
+   https://github.com/WongJeYi/ColTable
 Basic Information
 =================
 
