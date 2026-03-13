@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.11)
+
+project(ColTable)
+
+add_executable(ColTable main.cpp ColTable.cpp)
+add_executable(run_tests 
+    ColTable_test.cpp 
+    ColTable.cpp
+)
+include(GoogleTest)
+target_link_libraries(run_tests gtest_main)
+gtest_discover_tests(run_tests)
+
+install(TARGETS ColTable DESTINATION .)
+
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.15.2  # Use a specific stable version
+)
+# For Windows/WSL compatibility
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
