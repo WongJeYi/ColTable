@@ -7,11 +7,7 @@ add_executable(run_tests
     ColTable_test.cpp 
     ColTable.cpp
 )
-include(GoogleTest)
-target_link_libraries(run_tests gtest_main)
-gtest_discover_tests(run_tests)
 
-install(TARGETS ColTable DESTINATION .)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -24,3 +20,8 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
+include(GoogleTest)
+target_link_libraries(run_tests gtest_main)
+gtest_discover_tests(run_tests)
+
+install(TARGETS ColTable DESTINATION .)
