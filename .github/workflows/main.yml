@@ -1,0 +1,14 @@
+- name: Install GoogleTest
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtest-dev cmake
+        # Navigate to the system-provided GTest source directory
+        cd /usr/src/googletest/googletest
+        sudo mkdir build && cd build
+        sudo cmake ..
+        sudo make
+        # Copy the compiled libraries to a standard system path
+        sudo cp lib/libgtest* /usr/lib/
+        # Optional: Link them so FindGTest can locate them easily
+        sudo ln -s /usr/lib/libgtest.a /usr/local/lib/libgtest.a
+        sudo ln -s /usr/lib/libgtest_main.a /usr/local/lib/libgtest_main.a
