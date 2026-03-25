@@ -1,9 +1,12 @@
-- name: install-gtest
+            - name: install-gtest
+  # You may pin to the exact commit or the version.
+  # uses: dvd0bvb/install-gtest@3840e526c42196ce19ebfa96deaf520ba136866f
   uses: dvd0bvb/install-gtest@v1
   with:
-    # Latest stable version is often 1.14.0 or 1.15.0
-    gtest_version: "1.14.0" 
-    # Standard for Ubuntu 22.04/24.04 runners is typically version 15 or 18
-    libcxx_version: "15"
-    # Set to 'true' only if you are running MemorySanitizer tests
-    msan: false
+    # Version of gtest to install
+    gtest_version: 1.12.1
+    # Version of libc++ that is already installed
+    libcxx_version: "17"
+    # Install binaries instrumented with memory sanitization
+    msan: # optional
+          
