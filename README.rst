@@ -9,7 +9,7 @@ Basic Information
 =================
 
 
-The ColTable is a way to store tables of data in a column major format for better query performance.
+The ColTable is a way to store tables of data in a columnar array format for better query performance.
 ColTable includes add, replace, remove, index, concatenation, and length.
 
 
