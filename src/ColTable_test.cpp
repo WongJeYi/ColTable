@@ -95,16 +95,22 @@ TEST(ColTableTest, RoundTripAllNumericTypes) {
 }
 
 TEST(ColTableTest, StringRoundTrip) {
-    std::vector<std::string> myVector3 = {"ssd", "memory", "gpu", "bios", "cpu", "lm"};
+    std::vector<std::optional<std::string>> myVector3 = {"ssd", "memory", "gpu", "bios", "cpu", "lm"};
     
-    ColTable table3 = ColTable::FromVector<std::string>(myVector3);
+    ColTable table3 = ColTable::FromVector<std::optional<std::string>>(myVector3);
     
     // Using the Out-Parameter
-    std::vector<std::string> returnVector3;
+    std::vector<std::optional<std::string>> returnVector3;
     ColTable::convertToArray(std::make_shared<ColTable>(table3), returnVector3);
     
     ASSERT_EQ(returnVector3.size(), myVector3.size());
-    EXPECT_EQ(returnVector3, myVector3);
+    // 2. Loop through and compare the actual values safely
+    for (size_t i = 0; i < myVector3.size(); ++i) {
+        // If they both have a value, compare the underlying strings
+        if (myVector3[i].has_value()) {
+            EXPECT_EQ(returnVector3[i].value(), myVector3[i].value()) << "Mismatch at index " << i;
+        }
+    }
 }
 
 // Helper to generate a fully randomized 2D vector of double
@@ -175,7 +181,7 @@ TEST(ColTableTest, ListRoundTripRandom) {
     std::list<int32_t> myList = generateRandomList(50);
     
     // 2. Serialize to Columnar Format
-    ColTable table = ColTable::FromList(myList);
+    ColTable table = ColTable::FromVector(myList);
     auto tablePtr = std::make_shared<ColTable>(table);
     
     // 3. Deserialize back using the Out-Parameter
@@ -186,4 +192,49 @@ TEST(ColTableTest, ListRoundTripRandom) {
     // 4. Assert exact size and data match
     ASSERT_EQ(returnList.size(), myList.size());
     EXPECT_EQ(returnList, myList);
+}
+
+TEST(ColTableTest, StructRoundTripRandom) {
+    // 1. Pure Data Struct (No ColTable logic inside!)
+    struct ColTable_test {
+        std::list<int32_t> m_myList;
+        int64_t m_count;
+        
+        ColTable_test() = default;
+        
+        ColTable_test(std::list<int32_t> myList, int64_t count) {
+            m_myList = myList;
+            m_count = count;
+        }
+
+        bool operator==(const ColTable_test& other) const {
+            return m_count == other.m_count && m_myList == other.m_myList;
+        }
+    };
+    
+    ColTable_test p1(generateRandomList(50), 50);
+    ColTable_test p2(generateRandomList(30), 30);
+    std::vector<ColTable_test> structVec = {p1, p2};
+
+    // 2. Serialize to Columnar Format (Magic happens here)
+    ColTable table = ColTableStructMapper::Serialize(
+        structVec,
+        "m_myList", &ColTable_test::m_myList,
+        "m_count", &ColTable_test::m_count
+    );
+    
+    auto tablePtr = std::make_shared<ColTable>(table);
+    
+    // 3. Deserialize back
+    std::vector<ColTable_test> returnStruct;
+    ColTableStructMapper::Deserialize(
+        tablePtr, 
+        returnStruct,
+        "m_myList", &ColTable_test::m_myList,
+        "m_count", &ColTable_test::m_count
+    );
+    
+    // 4. Assert exact size and data match
+    ASSERT_EQ(returnStruct.size(), structVec.size());
+    EXPECT_EQ(returnStruct, structVec);
 }
