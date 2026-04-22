@@ -1,18 +1,31 @@
 name: GTest CI
 
 on: [push, pull_request]
+
 jobs:
-  build_and_test:     # No dash!
-    runs-on:  ubuntu-latest
+  build_and_test:
+    runs-on: ubuntu-latest
     steps:
-      - name: install-gtest
-        # You may pin to the exact commit or the version.
-        # uses: dvd0bvb/install-gtest@3840e526c42196ce19ebfa96deaf520ba136866f
-        uses: dvd0bvb/install-gtest@v1
-        with:
-          # Version of gtest to install
-          gtest_version: 1.12.1
-          # Version of libc++ that is already installed
-          libcxx_version: "17"
-          # Install binaries instrumented with memory sanitization
-          msan: # optional
+      # 1. Checkout your repository code so the runner has access to run.sh
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Safely download and install GTest (replaces the failing wget command)
+      - name: Download and Install GTest (MSAN)
+        env:
+          # Automatically uses GitHub's built-in token to prevent API rate limits
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Use GitHub CLI to download the exact package bypassing the need for jq/wget
+          gh release download 1.12.1-libcxx-17 \
+            --repo dvd0bvb/build-gtest \
+            --pattern "googletest-1.12.1-libcxx-17-msan.deb"
+          
+          # Install the downloaded .deb package
+          sudo dpkg -i googletest-1.12.1-libcxx-17-msan.deb
+
+      # 3. Make the script executable and run your build/tests
+      - name: Build and Test via run.sh
+        run: |
+          chmod +x run.sh
+          ./run.sh
