@@ -17,11 +17,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Use GitHub CLI to download the exact package bypassing the need for jq/wget
-          gh release download v1.12.1-libcxx-17 \
-            --repo dvd0bvb/build-gtest \
-            --pattern "googletest-1.12.1-libcxx-17-msan.deb"
-          
-          # Install the downloaded .deb package
+          wget https://github.com
           sudo dpkg -i googletest-1.12.1-libcxx-17-msan.deb
 
       # 3. Make the script executable and run your build/tests
