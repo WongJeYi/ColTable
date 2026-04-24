@@ -18,6 +18,8 @@ jobs:
 
       # 4. Download and install GTest package
       - name: Download and Install GTest (MSAN)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh release download v1.12.1 \
             --repo google/googletest \
