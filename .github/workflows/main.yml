@@ -21,10 +21,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download v1.12.1 \
+          gh release download \
             --repo google/googletest \
-            --pattern "googletest-1.12.1-libcxx-17-msan.deb"
-          sudo dpkg -i googletest-1.12.1-libcxx-17-msan.deb
+            --pattern "googletest-*-libcxx-17-msan.deb"
+          # Install the downloaded package
+          sudo dpkg -i googletest-*-libcxx-17-msan.deb
 
       # 5. Build and Test via run.sh
       - name: Build and Test via run.sh
