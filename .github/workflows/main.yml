@@ -39,5 +39,5 @@ jobs:
       # 4. Build and Test via run.sh
       - name: Build and Test via run.sh
         run: |
-          chmod +x /src/run.sh
+          chmod +x src/run.sh
           ./src/run.sh
