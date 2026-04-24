@@ -6,21 +6,32 @@ jobs:
   build_and_test:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout your repository code so the runner has access to run.sh
+      # 1. Checkout your repository code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Safely download and install GTest (replaces the failing wget command)
-      - name: Download and Install GTest (MSAN)
+      # 2. Install GitHub CLI
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      # 3. Authenticate GitHub CLI
+      - name: Authenticate GitHub CLI
         env:
-          # Automatically uses GitHub's built-in token to prevent API rate limits
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Use GitHub CLI to download the exact package bypassing the need for jq/wget
-          wget https://github.com
+          echo "${GH_TOKEN}" | gh auth login --with-token
+
+      # 4. Download and install GTest package
+      - name: Download and Install GTest (MSAN)
+        run: |
+          gh release download v1.12.1 \
+            --repo google/googletest \
+            --pattern "googletest-1.12.1-libcxx-17-msan.deb"
           sudo dpkg -i googletest-1.12.1-libcxx-17-msan.deb
 
-      # 3. Make the script executable and run your build/tests
+      # 5. Build and Test via run.sh
       - name: Build and Test via run.sh
         run: |
           chmod +x run.sh
