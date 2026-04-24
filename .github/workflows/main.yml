@@ -10,24 +10,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Install GitHub CLI
-      - name: Install GitHub CLI
+      # 2. Install GitHub CLI and build dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gh
+          sudo apt-get install -y gh cmake build-essential
 
-      # 4. Download and install GTest package
-      - name: Download and Install GTest (MSAN)
+      # 3. Download and build GoogleTest from source
+      - name: Build and Install GTest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Download the source tarball from the latest release
           gh release download \
             --repo google/googletest \
-            --pattern "googletest-*-libcxx-17-msan.deb"
-          # Install the downloaded package
-          sudo dpkg -i googletest-*-libcxx-17-msan.deb
+            --pattern "googletest-*.tar.gz"
 
-      # 5. Build and Test via run.sh
+          # Extract and build
+          tar -xzf googletest-*.tar.gz
+          cd googletest-*
+          cmake -S . -B build
+          cmake --build build -j $(nproc)
+          sudo cmake --install build
+
+      # 4. Build and Test via run.sh
       - name: Build and Test via run.sh
         run: |
           chmod +x run.sh
