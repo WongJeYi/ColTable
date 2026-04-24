@@ -26,9 +26,12 @@ jobs:
             --repo google/googletest \
             --pattern "googletest-*.tar.gz"
 
-          # Extract and build
+          # Extract and cd into the single directory
           tar -xzf googletest-*.tar.gz
-          cd googletest-*
+          DIR=$(tar -tzf googletest-*.tar.gz | head -1 | cut -f1 -d"/")
+          cd "$DIR"
+
+          # Build and install
           cmake -S . -B build
           cmake --build build -j $(nproc)
           sudo cmake --install build
