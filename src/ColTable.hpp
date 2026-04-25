@@ -577,24 +577,18 @@ public:
                 std::vector<int64_t> child_indices = indices;
                 std::cout << 4 << std::endl;
                 std::cout << start_index << "start" << std::endl;
+                int64_t elements_inserted = 0;
+                if (o_data && o_data_size > 0) {
+                    elements_inserted = o_data[o_data_size - 1] - o_data[0];
+                }
+
                 if (start_index < length)
                 {
                     for (size_t i = start_index + 1; i < length + 1; ++i)
                     {
-                        ptr[i] += v_data_size;
+                        // 2. Shift by element count, NOT byte count (v_data_size)
+                        ptr[i] += elements_inserted; 
                     }
-                    std::cout << 5 << std::endl;
-                }
-
-                std::cout << 6 << std::endl;
-                if (depth + 1 < child_indices.size())
-                {
-                    child_indices[depth + 1] = offset_start;
-                }
-                else
-                {
-                    // If the vector is too small, grow it!
-                    child_indices.push_back(offset_start);
                 }
                 if (o_data && o_data_size > 0)
                 {
