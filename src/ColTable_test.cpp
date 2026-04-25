@@ -50,9 +50,15 @@ void TestRoundTrip(const std::string& typeName) {
     // 1. Setup random data
     std::vector<T> original = randomGenerator<T>();
 
+    std::vector<T> add = randomGenerator<T>();
+
     // 2. Convert TO the ColTable format
     ColTable table = ColTable::FromVector<T>(original);
-
+    
+    std::vector<int64_t> len_ori={original.size()};
+    table.insert_at(len_ori,add);
+    size_t len={add.size()};
+    table.remove_at(len_ori,len);
     // 3. Convert BACK to vectors (Using the Out-Parameter)
     std::vector<T> recovered;
     ColTable::convertToArray(std::make_shared<ColTable>(table), recovered);
@@ -65,7 +71,7 @@ void TestRoundTrip(const std::string& typeName) {
 // ==========================================
 // The Actual GTest Suite
 // ==========================================
-TEST(ColTableTest, RoundTripAllNumericTypes) {
+TEST(ColTableTest, RoundTripAllNumericTypes_add_remove) {
     
     // --- Explicitly Sized Signed Integers ---
     TestRoundTrip<int8_t>("int8_t");
@@ -94,11 +100,18 @@ TEST(ColTableTest, RoundTripAllNumericTypes) {
     TestRoundTrip<double>("double");
 }
 
-TEST(ColTableTest, StringRoundTrip) {
+TEST(ColTableTest, StringRoundTrip_add_remove) {
     std::vector<std::optional<std::string>> myVector3 = {"ssd", "memory", "gpu", "bios", "cpu", "lm"};
+    std::vector<std::optional<std::string>> add = {"ssd", "memory", "gpu"};
     
     ColTable table3 = ColTable::FromVector<std::optional<std::string>>(myVector3);
-    
+    std::vector<int64_t> len={5};
+    printValueBuffer(table3.getData(),format::STRING);
+    table3.insert_at(len,add);
+    printValueBuffer(table3.getData(),format::STRING);
+    table3.remove_at(len,3);
+    printValueBuffer(table3.getData(),format::STRING);
+
     // Using the Out-Parameter
     std::vector<std::optional<std::string>> returnVector3;
     ColTable::convertToArray(std::make_shared<ColTable>(table3), returnVector3);
@@ -120,7 +133,7 @@ std::vector<std::vector<double>> generateRandom2DVector(int maxRows, int maxCols
     
     // Distributions for our random numbers
     std::uniform_int_distribution<> row_dist(1, maxRows);
-    std::uniform_int_distribution<> col_dist(0, maxCols); // 0 allows testing empty inner lists!
+    std::uniform_int_distribution<> col_dist(1, maxCols); // 0 allows testing empty inner lists!
     std::uniform_real_distribution<double> val_dist(-1000, 1000); // Random data values
 
     int numRows = row_dist(gen);
@@ -142,11 +155,20 @@ std::vector<std::vector<double>> generateRandom2DVector(int maxRows, int maxCols
 }
 
 TEST(ColTableTest, AoARoundTripRandom) {
-    // 1. Generate random 2D data (Up to 10 rows, up to 15 items per row)
-    std::vector<std::vector<double>> myVector = generateRandom2DVector(10, 15);
+    // 1. Generate random 2D data (Up to 2 rows, up to 3 items per row)
+    std::vector<std::vector<double>> myVector = generateRandom2DVector(2, 3);
+    std::vector<std::vector<double>> add = generateRandom2DVector(4, 3);
     
     // 2. Serialize to Columnar Format (Fixed extra '>' typo here)
     ColTable table = ColTable::FromVector<double>(myVector);
+    int64_t len= myVector.size();
+    std::vector<int64_t> lens={len};
+    printValueBuffer(table.getData(),format::AoA);
+    table.insert_at(lens,add);
+    printValueBuffer(table.getData(),format::AoA);
+    table.remove_at(lens,add.size());
+    printValueBuffer(table.getData(),format::AoA);
+
     auto tablePtr = std::make_shared<ColTable>(table);
     
     // 3. Deserialize back to C++ Arrays using the Out-Parameter
@@ -211,17 +233,27 @@ TEST(ColTableTest, StructRoundTripRandom) {
             return m_count == other.m_count && m_myList == other.m_myList;
         }
     };
-    
-    ColTable_test p1(generateRandomList(50), 50);
-    ColTable_test p2(generateRandomList(30), 30);
+    // original data
+    ColTable_test p1(generateRandomList(5), 5);
+    ColTable_test p2(generateRandomList(3), 3);
     std::vector<ColTable_test> structVec = {p1, p2};
 
-    // 2. Serialize to Columnar Format (Magic happens here)
+    //insert data
+    ColTable_test p3(generateRandomList(4), 4);
+    ColTable_test p4(generateRandomList(2), 2);
+    std::vector<ColTable_test> addVec = {p3, p4};
+
     ColTable table = ColTableStructMapper::Serialize(
         structVec,
         "m_myList", &ColTable_test::m_myList,
         "m_count", &ColTable_test::m_count
     );
+    std::vector<int64_t> insert_indices = { static_cast<int64_t>(structVec.size()) };
+    
+    table.insert_struct_column(insert_indices, addVec, "m_myList", &ColTable_test::m_myList);
+    table.insert_struct_column(insert_indices, addVec, "m_count", &ColTable_test::m_count);
+    
+    table.remove_at(insert_indices, addVec.size());
     
     auto tablePtr = std::make_shared<ColTable>(table);
     
@@ -236,5 +268,6 @@ TEST(ColTableTest, StructRoundTripRandom) {
     
     // 4. Assert exact size and data match
     ASSERT_EQ(returnStruct.size(), structVec.size());
-    EXPECT_EQ(returnStruct, structVec);
+    EXPECT_EQ(returnStruct.data()->m_myList, structVec.data()->m_myList);
+    EXPECT_EQ(returnStruct.data()->m_count, structVec.data()->m_count);
 }

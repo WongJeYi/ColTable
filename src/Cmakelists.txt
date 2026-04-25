@@ -7,7 +7,12 @@ add_executable(run_tests
     ColTable_test.cpp 
     ColTable.cpp
 )
+find_package(pybind11 REQUIRED)
 
+pybind11_add_module(_ColTable 
+    _ColTable.cpp   # This should be your file with py::module_
+    ColTable.cpp    # Your core logic
+)
 
 include(FetchContent)
 FetchContent_Declare(

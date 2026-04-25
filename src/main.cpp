@@ -48,8 +48,8 @@ int main(){
     printValueBuffer(dataPtr264, format::INT64);
 
     // test for string
-    std::vector<std::string> myVector3 = {"ssd", "memory", "gpu", "bios", "cpu", "lm"};
-    ColTable table3 = ColTable::FromVector<std::string>(myVector3);
+    std::vector<std::optional<std::string>> myVector3 = {"ssd", "memory", "gpu", "bios", "cpu", "lm"};
+    ColTable table3 = ColTable::FromVector<std::optional<std::string>>(myVector3);
     
     std::shared_ptr<ColTableData> dataPtr3 = table3.getData();
     printValueBuffer(dataPtr3, format::STRING);
