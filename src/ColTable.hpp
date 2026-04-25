@@ -592,23 +592,22 @@ public:
                 }
                 if (o_data && o_data_size > 0)
                 {
+                    // Create a local copy so we don't corrupt the original array
+                    std::vector<int64_t> shifted_o_data(o_data, o_data + o_data_size);
+                    
                     for (size_t i = 0; i < o_data_size; i++)
                     {
-                        o_data[i] += offset_start;
+                        shifted_o_data[i] += offset_start;
                     }
+                    
                     offsetBuffer->insert_at((start_index + 1) * sizeof(int64_t),
-                                            o_data + 1, // Skip the 0 offset as it's already represented by ptr[start_index]
+                                            shifted_o_data.data() + 1, 
                                             (o_data_size - 1) * sizeof(int64_t));
                 }
                 length += (o_data_size - 1);
                 std::cout << 7 << std::endl;
                 children[0]->insert_at(child_indices, v_data, v_data_size, o_data, o_data_size, depth + 1);
-                std::cout << 8 << std::endl;
-                std::cout << o_data_size << "o_data_size" << std::endl;
-                std::cout << start_index << std::endl;
-                std::cout << o_data << std::endl;
-                offsetBuffer->insert_at((start_index + 1) * sizeof(int64_t), o_data, o_data_size * sizeof(int64_t));
-                std::cout << 9 << std::endl;
+                
             }
             else if (!children.empty())
             {

@@ -248,12 +248,16 @@ TEST(ColTableTest, StructRoundTripRandom) {
         "m_myList", &ColTable_test::m_myList,
         "m_count", &ColTable_test::m_count
     );
-    std::vector<int64_t> insert_indices = { static_cast<int64_t>(structVec.size()) };
+    // FIX 1: Generate an index for every item in addVec
+    std::vector<int64_t> insert_indices;
+    for (size_t i = 0; i < addVec.size(); ++i) {
+        insert_indices.push_back(structVec.size() + i);
+    }
     
     table.insert_struct_column(insert_indices, addVec, "m_myList", &ColTable_test::m_myList);
     table.insert_struct_column(insert_indices, addVec, "m_count", &ColTable_test::m_count);
     
-    table.remove_at(insert_indices, addVec.size());
+    table.remove_at(insert_indices, 1);
     
     auto tablePtr = std::make_shared<ColTable>(table);
     
@@ -268,6 +272,5 @@ TEST(ColTableTest, StructRoundTripRandom) {
     
     // 4. Assert exact size and data match
     ASSERT_EQ(returnStruct.size(), structVec.size());
-    EXPECT_EQ(returnStruct.data()->m_myList, structVec.data()->m_myList);
-    EXPECT_EQ(returnStruct.data()->m_count, structVec.data()->m_count);
+    EXPECT_EQ(returnStruct, structVec);
 }
