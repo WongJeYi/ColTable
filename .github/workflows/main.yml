@@ -9,7 +9,13 @@ jobs:
       # 1. Checkout your repository code
       - name: Checkout code
         uses: actions/checkout@v4
-
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.3'  # <-- Exact version specified here
+    
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pybind11 pytest
       # 2. Install GitHub CLI and build dependencies
       - name: Install dependencies
         run: |
