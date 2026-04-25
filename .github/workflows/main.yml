@@ -1,18 +1,43 @@
 name: GTest CI
 
 on: [push, pull_request]
+
 jobs:
-  build_and_test:     # No dash!
-    runs-on:  ubuntu-latest
+  build_and_test:
+    runs-on: ubuntu-latest
     steps:
-      - name: install-gtest
-        # You may pin to the exact commit or the version.
-        # uses: dvd0bvb/install-gtest@3840e526c42196ce19ebfa96deaf520ba136866f
-        uses: dvd0bvb/install-gtest@v1
-        with:
-          # Version of gtest to install
-          gtest_version: 1.12.1
-          # Version of libc++ that is already installed
-          libcxx_version: "17"
-          # Install binaries instrumented with memory sanitization
-          msan: # optional
+      # 1. Checkout your repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Install GitHub CLI and build dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh cmake build-essential
+
+      # 3. Download and build GoogleTest from source
+      - name: Build and Install GTest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Download the source tarball from the latest release
+          gh release download \
+            --repo google/googletest \
+            --pattern "googletest-*.tar.gz"
+
+          # Extract and cd into the single directory
+          tar -xzf googletest-*.tar.gz
+          DIR=$(tar -tzf googletest-*.tar.gz | head -1 | cut -f1 -d"/")
+          cd "$DIR"
+
+          # Build and install
+          cmake -S . -B build
+          cmake --build build -j $(nproc)
+          sudo cmake --install build
+
+      # 4. Build and Test via run.sh
+      - name: Build and Test via run.sh
+        run: |
+          chmod +x src/run.sh
+          ./src/run.sh
