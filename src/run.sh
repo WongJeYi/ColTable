@@ -34,5 +34,5 @@ else
     echo "Python tests failed! Aborting build."
     exit 1  # <--- CRITICAL: This tells GitHub Actions the step failed!
 fi
-
+rm -rf "$BUILD_DIR"
 echo "All builds and tests completed successfully!"
