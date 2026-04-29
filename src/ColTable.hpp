@@ -82,6 +82,9 @@ public:
     void *buffer;
     size_t bufferSize;
     size_t capacity;
+    const int& operator[](size_t index) {
+        return static_cast<int*>(aligned_ptr)[index];
+    }
 
     Buffer(size_t size) : bufferSize(size)
     {
@@ -637,7 +640,7 @@ public:
         int64_t start_index = indices[depth];
         if (nChildren <= 0)
         {
-            if (start_index + range <= length)
+            if (start_index + range <= length+1)
             {
                 if (offsetBuffer && valueBuffer)
                 {
@@ -759,60 +762,7 @@ public:
         children.erase(children.begin() + index);
         nChildren = children.size();
     }
-    StringView get_string_view() const
-    {
-        if (!valueBuffer || !offsetBuffer)
-            return {nullptr, nullptr, 0, 0};
-
-        return {
-            static_cast<char *>(valueBuffer->get()),
-            static_cast<int64_t *>(offsetBuffer->get()),
-            length,
-            static_cast<uint8_t *>(validityBitmapsBuffer->get())};
-    }
-    template <typename T>
-    View<T> get(int64_t index) const
-    {
-        if (!valueBuffer || index >= length)
-            return {nullptr, 0};
-        if constexpr (std::is_same_v<T, std::string>)
-        {
-        }
-        if (offsetBuffer && !children.empty())
-        {
-            // We know from FromVector that the flattened data is in the first child
-            auto &dataChild = children[0];
-
-            if (!dataChild || !dataChild->valueBuffer)
-                return {nullptr, 0};
-
-            int64_t *offsets = static_cast<int64_t *>(offsetBuffer->get());
-            int64_t start = offsets[index];
-            int64_t end = offsets[index + 1];
-
-            // Pointer arithmetic: Start at the beginning of the child's buffer + the offset
-            T *ptr = reinterpret_cast<T *>(static_cast<char *>(dataChild->valueBuffer->get()) + start);
-
-            // Return the slice (View) of that specific row
-            return {ptr, (size_t)(end - start) / sizeof(T)};
-        }
-
-        // Casts the internal aligned_ptr to the requested pointer type
-        if (offsetBuffer)
-        {
-            int64_t *offsetBuffer_ptr = static_cast<int64_t *>(offsetBuffer->get());
-            int64_t start = offsetBuffer_ptr[index];
-            int64_t end = offsetBuffer_ptr[index + 1];
-            T *ptr = reinterpret_cast<T *>(static_cast<char *>(valueBuffer->get()) + start);
-            return {ptr, (size_t)(end - start) / sizeof(T)};
-        }
-        else
-        {
-
-            T *ptr = static_cast<T *>(valueBuffer->get());
-            return {&ptr[index], 1};
-        }
-    }
+    
     void addBuffer(std::shared_ptr<Buffer> buffer)
     {
         valueBuffer = buffer;
@@ -912,6 +862,69 @@ public:
             }
         }
         this->data->length = max_child_len;
+    }
+    
+    StringView get_string_view() const
+    {
+        if (!data->valueBuffer || !data->offsetBuffer)
+            return {nullptr, nullptr, 0, 0};
+
+        return {
+            static_cast<char *>(data->valueBuffer->get()),
+            static_cast<int64_t *>(data->offsetBuffer->get()),
+            data->length,
+            static_cast<uint8_t *>(data->validityBitmapsBuffer->get())};
+    }
+    
+    template <typename T>
+    View<T> operator[](int64_t index) const
+    {
+        if (index < 0 || index >= (int64_t)data->length) {
+            return {nullptr,0};
+        }
+        if(data->nChildren<=0){
+
+            // String
+            if (data->offsetBuffer && data->valueBuffer)
+            {
+                int64_t *offsetBuffer_ptr = static_cast<int64_t *>(data->offsetBuffer->get());
+                int64_t start = offsetBuffer_ptr[index];
+                int64_t end = offsetBuffer_ptr[index + 1];
+                T *ptr = (static_cast<T *>(data->valueBuffer->get()) + start);
+                return {ptr, (size_t)(end - start)};
+            }
+            //primitive
+            if (data->valueBuffer) {
+                T *ptr = static_cast<T *>(data->valueBuffer->get());
+                return {&ptr[index], 1}; // Returns a view of length 1 for a single scalar
+            }
+        }
+        else{
+            //AoA
+            if (data->offsetBuffer && !data->children.empty())
+            {
+                // The flattened data is in the first child
+                auto &dataChild = data->children[0];
+
+                if (!dataChild || !dataChild->valueBuffer)
+                    return {nullptr, 0};
+
+                int64_t *offsets = static_cast<int64_t *>(data->offsetBuffer->get());
+                int64_t start = offsets[index];
+                int64_t end = offsets[index + 1];
+
+                // Pointer arithmetic: Start at the beginning of the child's buffer + the offset
+                T *ptr = static_cast<T *>(dataChild->valueBuffer->get()) + start;
+
+                // Return the slice (View) of that specific row
+                return {ptr, (size_t)(end - start) };
+            }else
+            {
+                //Struct
+                T *ptr = static_cast<T *>(data->valueBuffer->get());
+                return {&ptr[index], 1};
+            }
+        }
     }
     void remove_at(std::vector<int64_t> &indices, size_t range)
     {

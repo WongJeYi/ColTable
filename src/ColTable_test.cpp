@@ -161,6 +161,9 @@ TEST(ColTableTest, AoARoundTripRandom) {
     
     // 2. Serialize to Columnar Format (Fixed extra '>' typo here)
     ColTable table = ColTable::FromVector<double>(myVector);
+    std::cout << "Original Size: " << myVector.size() << std::endl;
+    std::cout << "Add Size: " << add.size() << std::endl;
+    std::cout << "Table Length after Insert: " << table.getData()->length << std::endl;
     int64_t len= myVector.size();
     std::vector<int64_t> lens={len};
     printValueBuffer(table.getData(),format::AoA);

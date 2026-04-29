@@ -32,7 +32,16 @@ if PYTHONPATH=$(pwd)/"$BUILD_DIR"   pytest test_.py -s; then
     echo "Python tests passed successfully!"
 else
     echo "Python tests failed! Aborting build."
-    exit 1  # <--- CRITICAL: This tells GitHub Actions the step failed!
+    exit 1 
 fi
+# Run performance.py
+if PYTHONPATH=$(pwd)/"$BUILD_DIR"   python3 performance.py; then
+    echo "Performance tests done."
+else
+    echo "Performance tests failed."
+    exit 1
+fi
+
 rm -rf "$BUILD_DIR"
-echo "All builds and tests completed successfully!"
+echo "All builds and tests completed successfully!" 
+

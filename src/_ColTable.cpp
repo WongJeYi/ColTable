@@ -3,6 +3,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/complex.h>
 #include "ColTable.hpp"
+#include <stdexcept>
 
 namespace py = pybind11;
 
@@ -103,11 +104,16 @@ void bind_coltable_factory(py::class_<ColTable, std::shared_ptr<ColTable>> &ct, 
 template <typename T>
 void bind_view(py::module &m, const std::string &name) {
     py::class_<View<T>>(m, name.c_str(), py::buffer_protocol())
+        .def("__getitem__", [](View<T> &v, size_t j) {
+            if (j >= v.length) throw py::index_error();
+            return v.data[j]; 
+        })
+        .def("__len__", [](View<T> &v) { return v.length; })
         .def_buffer([](View<T> &v) -> py::buffer_info {
             return py::buffer_info(
                 v.data, sizeof(T),
                 py::format_descriptor<T>::format(),
-                1, { v.length }, { sizeof(T) }
+                1, { (ssize_t)v.length }, { (ssize_t)sizeof(T) }
             );
         });
 }
@@ -126,29 +132,7 @@ void bind_ColTableData(py::module &m, const std::string &name){
         .def("addBuffer",&ColTableData::addBuffer)
         .def("addOffsetBuffer",&ColTableData::addOffsetBuffer)
         .def("removeChild",&ColTableData::removeChild)
-        .def("getBuffer",&ColTableData::getBuffer,py::return_value_policy::reference_internal)
-        .def("get_bool", &ColTableData::get<bool>, py::return_value_policy::reference_internal)
-        .def("get_float", &ColTableData::get<float>, py::return_value_policy::reference_internal)
-        .def("get_double", &ColTableData::get<double>, py::return_value_policy::reference_internal)
-        .def("get_int64", &ColTableData::get<int64_t>, py::return_value_policy::reference_internal)
-        .def("get_int32", &ColTableData::get<int32_t>, py::return_value_policy::reference_internal)
-        .def("get_int16", &ColTableData::get<int16_t>, py::return_value_policy::reference_internal)
-        .def("get_int8", &ColTableData::get<int8_t>, py::return_value_policy::reference_internal)
-        .def("get_uint64", &ColTableData::get<uint64_t>, py::return_value_policy::reference_internal)
-        .def("get_uint32", &ColTableData::get<uint32_t>, py::return_value_policy::reference_internal)
-        .def("get_uint16", &ColTableData::get<uint16_t>, py::return_value_policy::reference_internal)
-        .def("get_uint8", &ColTableData::get<uint8_t>, py::return_value_policy::reference_internal)
-        //.def("get_short", &ColTableData::get<short>, py::return_value_policy::reference_internal)
-        //.def("get_long", &ColTableData::get<long>, py::return_value_policy::reference_internal)
-        //.def("get_long_long", &ColTableData::get<long long>, py::return_value_policy::reference_internal)
-       .def("get_string_view", [](ColTableData &self) {
-            return StringView{
-                static_cast<char*>(self.valueBuffer->get()),
-                static_cast<int64_t*>(self.offsetBuffer->get()),
-                self.length,
-                static_cast<uint8_t*>(self.validityBitmapsBuffer->get())
-            };
-        });
+        .def("getBuffer",&ColTableData::getBuffer,py::return_value_policy::reference_internal);
 }
 PYBIND11_MODULE(_ColTable, m) {
    // --- Floating Point ---
@@ -179,7 +163,13 @@ PYBIND11_MODULE(_ColTable, m) {
     //bind_view<unsigned short>(m, "ViewUShort");
     //bind_view<unsigned long>(m, "ViewULong");
     //bind_view<unsigned long long>(m, "ViewULongLong");
-
+    
+    py::class_<Buffer>(m, "Buffer")
+        .def(py::init<size_t>()) 
+        .def("__getitem__", [](Buffer &b, size_t i) {
+            if (i >= b.bufferSize) throw py::index_error();
+            return b[i];
+        });
     py::class_<StringView>(m, "ViewString")
         .def("__len__", [](const StringView &v) { return v.length; })
         .def("__getitem__", [](const StringView &v, size_t i) -> py::object {
@@ -284,7 +274,81 @@ PYBIND11_MODULE(_ColTable, m) {
              self.remove_at(indices, range);
         }, py::arg("indices"),py::arg("range"),
         "Removes rows starting at the given indices.")
-      .def("sync_length", &ColTable::sync_length_with_children);
+      .def("sync_length", &ColTable::sync_length_with_children)
+      .def("__getitem__", [](ColTable &self, int64_t i) -> py::object {
+            if (i < 0 || i >= (int64_t)self.data->length) throw py::index_error();
+
+            // This assumes you have a way to access the column format from the data object
+            // If not, you might store 'format' inside ColTableData during construction
+            switch (self.field->Format) {
+                case format::BOOL:      return py::cast(self.operator[]<bool>(i));
+                case format::INT8:      return py::cast(self.operator[]<int8_t>(i));
+                case format::INT16:     return py::cast(self.operator[]<int16_t>(i));
+                case format::INT32:     return py::cast(self.operator[]<int32_t>(i));
+                case format::INT64:     return py::cast(self.operator[]<int64_t>(i));
+                case format::UINT8:     return py::cast(self.operator[]<uint8_t>(i));
+                case format::UINT16:    return py::cast(self.operator[]<uint16_t>(i));
+                case format::UINT32:    return py::cast(self.operator[]<uint32_t>(i));
+                case format::UINT64:    return py::cast(self.operator[]<uint64_t>(i));
+                case format::FLOAT:     return py::cast(self.operator[]<float>(i));
+                case format::DOUBLE:    return py::cast(self.operator[]<double>(i));
+                case format::AoA: {
+                    if (self.field->children.empty() || self.field->children[0] == nullptr) {
+                        throw std::runtime_error("AoA column is missing its inner child schema");
+                    }
+                    switch (self.field->children[0]->Format) {
+                        case format::BOOL:      return py::cast(self.operator[]<bool>(i));
+                        case format::INT8:      return py::cast(self.operator[]<int8_t>(i));
+                        case format::INT16:     return py::cast(self.operator[]<int16_t>(i));
+                        case format::INT32:     return py::cast(self.operator[]<int32_t>(i));
+                        case format::INT64:     return py::cast(self.operator[]<int64_t>(i));
+                        case format::UINT8:     return py::cast(self.operator[]<uint8_t>(i));
+                        case format::UINT16:    return py::cast(self.operator[]<uint16_t>(i));
+                        case format::UINT32:    return py::cast(self.operator[]<uint32_t>(i));
+                        case format::UINT64:    return py::cast(self.operator[]<uint64_t>(i));
+                        case format::FLOAT:     return py::cast(self.operator[]<float>(i));
+                        case format::DOUBLE:    return py::cast(self.operator[]<double>(i));
+                        
+                        default:
+                            throw std::runtime_error("Unsupported inner type for AoA indexing");
+                    }
+                }
+                default:
+                    throw std::runtime_error("Unsupported format for indexing");
+            }
+        }, py::keep_alive<0, 1>())
+        .def("get_string_view", [](ColTable &self) {
+            return StringView{
+                static_cast<char*>(self.data->valueBuffer->get()),
+                static_cast<int64_t*>(self.data->offsetBuffer->get()),
+                self.data->length,
+                static_cast<uint8_t*>(self.data->validityBitmapsBuffer->get())
+            };
+        });
+    ct.def("to_numpy_matrix", [](std::shared_ptr<ColTable> self) -> py::array_t<double> {
+        auto child_data = self->getData()->children[0];
+        
+        int64_t num_rows = self->getData()->length;
+        int64_t total_elements = child_data->length;
+        
+        if (total_elements % num_rows != 0) {
+            throw std::runtime_error("Cannot cast ragged AoA to a 2D NumPy array. Rows must be equal length.");
+        }
+        
+        int64_t num_cols = total_elements / num_rows;
+        double* ptr = static_cast<double*>(child_data->valueBuffer->get());
+
+        py::capsule keep_alive(new std::shared_ptr<ColTable>(self), [](void *p) {
+            delete reinterpret_cast<std::shared_ptr<ColTable>*>(p);
+        });
+
+        return py::array_t<double>(
+            {num_rows, num_cols},                                     // Shape: [N, M]
+            {num_cols * sizeof(double), sizeof(double)},              // Strides: [Bytes to next row, Bytes to next col]
+            ptr,                                                      // Raw C++ pointer
+            keep_alive                                                // Memory manager
+        );
+    });
 
     // --- The Smart Bindings ---
     BIND_CT_TYPE(bool,          "bool");
@@ -312,6 +376,7 @@ PYBIND11_MODULE(_ColTable, m) {
         ColTable::convertToStruct(table, columns);
         return columns;
     });
+
 
 
     
