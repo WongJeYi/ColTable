@@ -146,22 +146,21 @@ public:
             uint8_t *old_src = static_cast<uint8_t *>(aligned_ptr);
             if (old_src)
             {
-                std::cout << "start" << start_index << std::endl;
+                
                 std::memcpy(target, old_src, start_index);
-                std::cout << "input" << input_size << std::endl;
+                
                 std::memcpy(target + start_index + input_size, old_src + start_index, bufferSize - start_index);
             }
             if (data)
             {
-                std::cout << "data" << data << std::endl;
+                
                 std::memcpy(target + start_index, data, input_size);
             }
             else
             {
                 std::memset(target + start_index, 0, input_size);
             }
-            std::cout << "oldbuffer" << bufferSize << std::endl;
-            std::cout << "buffer" << new_bufferSize << std::endl;
+            
             next.bufferSize = new_bufferSize;
             *this = std::move(next);
         }
@@ -169,11 +168,9 @@ public:
         {
             uint8_t *old_src = static_cast<uint8_t *>(aligned_ptr);
 
-            std::cout << "input" << input_size << std::endl;
             std::memmove(old_src + start_index + input_size, old_src + start_index, bufferSize - start_index);
             if (data)
             {
-                std::cout << "data" << data << std::endl;
                 std::memmove(old_src + start_index, data, input_size);
             }
             else
@@ -181,8 +178,6 @@ public:
                 std::memset(old_src + start_index, 0, input_size);
             }
             bufferSize = new_bufferSize;
-            std::cout << "oldbuffer" << bufferSize << std::endl;
-            std::cout << "buffer" << new_bufferSize << std::endl;
         }
     }
     void remove_at(size_t index_start, size_t range)
@@ -572,14 +567,15 @@ public:
                 // AoA
                 // AoA flattened the child into first child, and the parent will contain offsetBuffer and one child
                 // get the offset of offsetbuffer
-                std::cout << 1 << std::endl;
+                
                 int64_t *ptr = static_cast<int64_t *>(offsetBuffer->get());
-                std::cout << 2 << std::endl;
+                
                 int64_t offset_start = ptr[indices[depth]];
-                std::cout << 3 << std::endl;
+                
                 std::vector<int64_t> child_indices = indices;
-                std::cout << 4 << std::endl;
-                std::cout << start_index << "start" << std::endl;
+                for (int i=0;i<=start_index;i++){
+                    std::cout<<"START_INDEX"<<ptr[i]<<std::endl;
+                }
                 int64_t elements_inserted = 0;
                 if (o_data && o_data_size > 0) {
                     elements_inserted = o_data[o_data_size - 1] - o_data[0];
@@ -587,7 +583,7 @@ public:
 
                 if (start_index < length)
                 {
-                    for (size_t i = start_index + 1; i < length + 1; ++i)
+                    for (size_t i = start_index; i < length + 1; ++i)
                     {
                         // 2. Shift by element count, NOT byte count (v_data_size)
                         ptr[i] += elements_inserted; 
@@ -602,13 +598,16 @@ public:
                     {
                         shifted_o_data[i] += offset_start;
                     }
-                    
+                    for (int i=0;i<shifted_o_data.size();i++){
+                        std::cout<<"Shifted_o_data"<<shifted_o_data[i]<<std::endl;
+                    }
                     offsetBuffer->insert_at((start_index + 1) * sizeof(int64_t),
-                                            shifted_o_data.data() + 1, 
-                                            (o_data_size - 1) * sizeof(int64_t));
+                                            shifted_o_data.data(), 
+                                            (o_data_size) * sizeof(int64_t));
                 }
-                length += (o_data_size - 1);
-                std::cout << 7 << std::endl;
+                std::cout<<"original length"<<length<<std::endl;
+                length += (o_data_size);
+                std::cout<<"new length"<<length<<std::endl;
                 children[0]->insert_at(child_indices, v_data, v_data_size, o_data, o_data_size, depth + 1);
                 
             }
@@ -687,6 +686,33 @@ public:
             {
                 std::ostringstream oss;
                 oss << "start_index+range<=length" << " start_index: " << start_index << " range: " << range << " length:" << length;
+                if(offsetBuffer){
+                    char* ptr = static_cast<char*>(valueBuffer->get());
+                    int64_t* offsetBuffer_ptr = static_cast<int64_t*>(offsetBuffer->get());
+                    int64_t length = offsetBuffer_ptr[length];
+                    int64_t count = 0;
+                    for (size_t i = 0; i < length; ++i) {
+                        std::cout << ptr[i] << (i == offsetBuffer_ptr[count]-1 ? ", " : "");
+                        std::cout << offsetBuffer_ptr[count] << (i == offsetBuffer_ptr[count]-1 ? ", " : "");
+                        if (offsetBuffer_ptr[count] < i) {
+                            count += 1;
+                        }
+                    }
+                    length = length+1;
+                    count = 0;
+                    std::cout <<std::endl;
+                    std::cout <<"OffsetBuffer"<<length<<std::endl;
+                    for (size_t i = 0; i < length; ++i) {
+                        std::cout << offsetBuffer_ptr[i] << ", ";
+                        if (offsetBuffer_ptr[count] < i) {
+                            count += 1;
+                        }
+                    }
+                }else{
+                double* ptr = static_cast<double*>(valueBuffer->get());
+                for (size_t i = 0; i < length; ++i) {
+                    std::cout << ptr[i] << (i == length - 1 ? "" : ", ");
+                }}
                 throw std::runtime_error(oss.str());
                 return;
             }
@@ -698,12 +724,22 @@ public:
             if (offsetBuffer && !children.empty())
             {
                 // AoA
+                //offsetbuffer ptr
                 int64_t *ptr = static_cast<int64_t *>(offsetBuffer->get());
-                int64_t offset_start = ptr[start_index];
+
+                //calculate offset start,end,range from offsetbuffer
+                for (int i=0;i<=start_index+range;i++){
+                    std::cout<<"START_INDEX"<<ptr[i]<<std::endl;
+                }
+                int64_t offset_start = ptr[start_index];//should this is wrong, what will be the offset_start
                 int64_t offset_end = ptr[start_index + range];
                 int64_t offset_range = offset_end - offset_start;
 
+                std::cout << "offset_start" << offset_start << std::endl;
+                std::cout << "offset_end" << offset_end << std::endl;
+                std::cout << "offset_range" << offset_range << std::endl;
                 std::vector<int64_t> child_indices = indices;
+                
                 if (depth + 1 < child_indices.size())
                 {
                     child_indices[depth + 1] = offset_start;
@@ -712,14 +748,17 @@ public:
                 {
                     child_indices.push_back(offset_start);
                 }
+                for (int i=0;i<child_indices.size();i++){
+                    std::cout<<"CHILD_INDICES"<<child_indices[i]<<std::endl;
+                }
 
-                // 1. Remove the flat elements from the child table FIRST
+                //remove value from child
                 children[0]->remove_at(child_indices, offset_range, depth + 1);
 
-                // 2. Remove the target offsets from the offsetBuffer
+                // remove from the offsetBuffer
                 offsetBuffer->remove_at((start_index + 1) * sizeof(int64_t), range * sizeof(int64_t));
 
-                // 3. Re-fetch pointer because remove_at might have resized/moved memory!
+                // re-fetch pointer because remove_at might have resized/moved memory!
                 ptr = static_cast<int64_t *>(offsetBuffer->get());
 
                 // 4. SHIFT the remaining trailing offsets DOWN
@@ -731,7 +770,9 @@ public:
                     }
                 }
 
+                std::cout<<"original length"<<length<<std::endl;
                 length -= range;
+                std::cout<<"new length"<<length<<std::endl;
             }
             else if (!children.empty())
             {
@@ -925,6 +966,7 @@ public:
                 return {&ptr[index], 1};
             }
         }
+        return {nullptr,0};
     }
     void remove_at(std::vector<int64_t> &indices, size_t range)
     {
@@ -985,7 +1027,6 @@ public:
     template <typename T>
     void insert_at(std::vector<int64_t> &indices, std::vector<T> &vec)
     {
-        std::cout << "prime" << expected_type.name() << std::endl;
         if (expected_type != std::type_index(typeid(T)))
         {
             if (expected_type != typeid(T))
@@ -1027,13 +1068,11 @@ public:
     template <typename T>
     void insert_at(std::vector<int64_t> &indices, std::vector<std::vector<T>> &vec)
     {
-        std::cout << "AoA" << expected_type.name() << std::endl;
         std::vector<T> flat_elements;
         std::vector<int64_t> offsets;
         offsets.reserve(vec.size());
 
         int64_t current_offset = 0;
-        // Handle the boolean bit-packing nightmare
         if constexpr (std::is_same_v<T, bool>)
         {
 
@@ -1045,20 +1084,17 @@ public:
 
             bool *ptr = reinterpret_cast<bool *>(std::malloc(total_bools));
 
-            std::cout << "FSU";
             size_t i = 0;
             for (const auto &inner_vec : vec)
             {
-                offsets.push_back(current_offset);
 
                 for (bool val : inner_vec)
                 {
                     ptr[i++] = (val ? 1 : 0);
                 }
                 current_offset += inner_vec.size();
+                offsets.push_back(current_offset);
             }
-
-            offsets.push_back(current_offset);
             this->data->insert_at(
                 indices, ptr,
                 total_bools,
@@ -1073,20 +1109,11 @@ public:
                 flat_elements.insert(flat_elements.end(), inner_vec.begin(), inner_vec.end());
                 current_offset += inner_vec.size();
                 offsets.push_back(current_offset);
-                std::cout << current_offset << ",";
             }
-            offsets.push_back(current_offset);
-            std::cout << "OFFSEt" << offsets.data() << std::endl;
-            std::cout << "OFFSEt" << offsets.size() << std::endl;
-            std::cout << "OFFSEt" << vec.size() << std::endl;
-            std::cout << "OFFSEt" << flat_elements.size() << std::endl;
-            std::cout << "OFFSEt" << indices[0] << std::endl;
+            //offsets.push_back(current_offset);
             // Now that the 2D array is flattened to 1D, we calculate byte sizes
             size_t byte_size = flat_elements.size() * sizeof(T);
-            for (int i = 0; i < offsets.size(); i++)
-            {
-                std::cout << offsets[i] << ",";
-            }
+            
             // Call the recursive ColTableData function.
             // The AoA block inside ColTableData will handle routing these bytes to the child.
             this->data->insert_at(
@@ -1105,7 +1132,7 @@ public:
                               const std::string &key,
                               FieldType T::*member_ptr)
     {
-        std::cout << "struct" << expected_type.name() << std::endl;
+        
         if (expected_type != std::type_index(typeid(T)))
         {
             if (expected_type != typeid(T) && expected_type != typeid(void))
@@ -1151,7 +1178,7 @@ public:
     template <typename T>
     void insert_at(std::vector<int64_t> &indices, std::vector<std::list<T>> &vec)
     {
-        std::cout << "list" << expected_type.name() << std::endl;
+        
         if (expected_type != std::type_index(typeid(T)))
         {
             if (expected_type != typeid(T) && expected_type != typeid(std::list<T>))
@@ -1177,14 +1204,13 @@ public:
             size_t i = 0;
             for (const auto &inner_list : vec)
             {
-                offsets.push_back(current_offset);
                 for (bool val : inner_list)
                 {
                     ptr[i++] = (val ? 1 : 0);
                 }
                 current_offset += inner_list.size();
+                offsets.push_back(current_offset);
             }
-            offsets.push_back(current_offset);
 
             this->data->insert_at(
                 indices, ptr,
@@ -1196,9 +1222,9 @@ public:
         {
             for (const auto &inner_list : vec)
             {
-                offsets.push_back(current_offset);
                 flat_elements.insert(flat_elements.end(), inner_list.begin(), inner_list.end());
                 current_offset += inner_list.size();
+                offsets.push_back(current_offset);
             }
 
             size_t byte_size = flat_elements.size() * sizeof(T);

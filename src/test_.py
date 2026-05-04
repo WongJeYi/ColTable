@@ -82,6 +82,7 @@ def round_trip_logic_add_and_remove(data_type,loop):
     add=random_generator(data_type,loop)
     length=len(add)
     insert_index = len(original)
+    print(data_type)
     if(loop):
         if(data_type is int):
             table = ct.ColTable.from_2d_int64(original)

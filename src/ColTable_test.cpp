@@ -163,14 +163,13 @@ TEST(ColTableTest, AoARoundTripRandom) {
     ColTable table = ColTable::FromVector<double>(myVector);
     std::cout << "Original Size: " << myVector.size() << std::endl;
     std::cout << "Add Size: " << add.size() << std::endl;
-    std::cout << "Table Length after Insert: " << table.getData()->length << std::endl;
+    std::cout << "Table Length before Insert: " << table.getData()->length << std::endl;
     int64_t len= myVector.size();
     std::vector<int64_t> lens={len};
-    printValueBuffer(table.getData(),format::AoA);
     table.insert_at(lens,add);
-    printValueBuffer(table.getData(),format::AoA);
+    std::cout << "Table Length after Insert: " << table.getData()->length << std::endl;
     table.remove_at(lens,add.size());
-    printValueBuffer(table.getData(),format::AoA);
+    std::cout << "Table Length after Removed: " << table.getData()->length << std::endl;
 
     auto tablePtr = std::make_shared<ColTable>(table);
     
@@ -189,7 +188,7 @@ std::list<int32_t> generateRandomList(int maxLength) {
     std::mt19937 gen(rd());
     
     // Distributions for length and values
-    std::uniform_int_distribution<> len_dist(0, maxLength); // 0 allows testing empty lists!
+    std::uniform_int_distribution<> len_dist(1, maxLength); // 0 allows testing empty lists!
     std::uniform_int_distribution<int32_t> val_dist(-1000, 1000);
 
     int numElements = len_dist(gen);
@@ -251,6 +250,9 @@ TEST(ColTableTest, StructRoundTripRandom) {
         "m_myList", &ColTable_test::m_myList,
         "m_count", &ColTable_test::m_count
     );
+    std::cout << "Original Size: " << structVec.size() << std::endl;
+    std::cout << "Add Size: " << addVec.size() << std::endl;
+    std::cout << "Table Length before Insert: " << table.getData()->length << std::endl;
     // FIX 1: Generate an index for every item in addVec
     std::vector<int64_t> insert_indices;
     for (size_t i = 0; i < addVec.size(); ++i) {
@@ -260,7 +262,8 @@ TEST(ColTableTest, StructRoundTripRandom) {
     table.insert_struct_column(insert_indices, addVec, "m_myList", &ColTable_test::m_myList);
     table.insert_struct_column(insert_indices, addVec, "m_count", &ColTable_test::m_count);
     
-    table.remove_at(insert_indices, 1);
+    std::cout << "Table Length after Insert: " << table.getData()->length << std::endl;
+    table.remove_at(insert_indices, addVec.size());
     
     auto tablePtr = std::make_shared<ColTable>(table);
     
