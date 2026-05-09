@@ -173,21 +173,25 @@ Start presentation slide preparation and update according to weekly progress
 Week 2 (03/16):
 Definition for c++ table structure
 Definition for c++ table operation functions
+Start from(03/13) Completed by (04/3)
 
 Week 3 (03/23):
 Python wrapper classes constructor
+Start from (04/3) Completed by (04/24)
 
 Week 4 (03/30):
 Troubleshooting week or completing delayed progress
 
 Week 5 (04/06):
 Create command testbench for python call
+Start from (04/3) Completed by (04/24)
 
 Week 6 (04/13):
 Troubleshooting week or completing delayed progress
 
 Week 7 (04/20):
 Optimization for memory
+Start from (24/4)
 
 Week 8 (04/27):
 Completing the final pieces/ refactoring
