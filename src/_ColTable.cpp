@@ -350,6 +350,76 @@ PYBIND11_MODULE(_ColTable, m) {
             keep_alive                                                // Memory manager
         );
     });
+    ct.def("flattened_to_numpy", [](std::shared_ptr<ColTable> self) -> py::array {
+        auto child_data = self->getData()->children[0];
+
+        py::capsule keep_alive(new std::shared_ptr<ColTable>(self), [](void *p) {
+            delete reinterpret_cast<std::shared_ptr<ColTable>*>(p);
+        });
+
+        switch (self->getField()->children[0]->Format) {
+            case format::INT64:
+            case format::LONG: {
+                auto ptr = static_cast<int64_t*>(child_data->valueBuffer->get());
+
+                return py::array_t<int64_t>(
+                    {child_data->length},
+                    {sizeof(int64_t)},
+                    ptr,
+                    keep_alive
+                );
+            }
+
+            default:
+                throw std::runtime_error("Unsupported child format for NumPy conversion");
+        }
+    });
+    ct.def("to_numpy", [](std::shared_ptr<ColTable> self) -> py::array {
+        auto data = self->getData();
+
+        py::capsule keep_alive(new std::shared_ptr<ColTable>(self), [](void *p) {
+            delete reinterpret_cast<std::shared_ptr<ColTable>*>(p);
+        });
+
+        switch (self->getField()->Format) {
+            case format::INT64:
+            case format::LONG: {
+                auto ptr = static_cast<int64_t*>(data->valueBuffer->get());
+
+                return py::array_t<int64_t>(
+                    {data->length},
+                    {sizeof(int64_t)},
+                    ptr,
+                    keep_alive
+                );
+            }
+
+            case format::DOUBLE: {
+                auto ptr = static_cast<double*>(data->valueBuffer->get());
+
+                return py::array_t<double>(
+                    {data->length},
+                    {sizeof(double)},
+                    ptr,
+                    keep_alive
+                );
+            }
+
+            case format::FLOAT: {
+                auto ptr = static_cast<float*>(data->valueBuffer->get());
+
+                return py::array_t<float>(
+                    {data->length},
+                    {sizeof(float)},
+                    ptr,
+                    keep_alive
+                );
+            }
+
+            default:
+                throw std::runtime_error("Unsupported format for NumPy conversion");
+        }
+    });
 
     // --- The Smart Bindings ---
     BIND_CT_TYPE(bool,          "bool");

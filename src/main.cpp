@@ -11,11 +11,11 @@ int main(){
     std::vector<int32_t> myVector = {1, 2, 3, 4, 5};
     std::vector<int32_t> myVector2 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-    // 2. Convert TO the ColTable format
+    // Convert TO the ColTable format
     ColTable table = ColTable::FromVector<int32_t>(myVector);
     ColTable table2 = ColTable::FromVector<int32_t>(myVector2);
 
-    // 3. Convert BACK to vectors (Using the new Out-Parameter approach)
+    // Convert BACK to vectors (Using the new Out-Parameter approach)
     std::vector<int32_t> returnVector;
     std::vector<int32_t> returnVector2;
     
@@ -54,7 +54,6 @@ int main(){
     std::shared_ptr<ColTableData> dataPtr3 = table3.getData();
     printValueBuffer(dataPtr3, format::STRING);
     
-    // Assuming getBuffer() and as<T>() are implemented in your Buffer/ColTableData classes
     auto buffer1 = dataPtr3->getBuffer();
     char* data = buffer1->as<char>(format::STRING);
     std::cout << data << std::endl;

@@ -181,10 +181,12 @@ public:
         }
     }
     void remove_at(size_t index_start, size_t range)
-    {
+    {   
+        #ifdef DEBUG
         std::cout << "index_startr" << index_start << std::endl;
         std::cout << "ranger" << range << std::endl;
         std::cout << "bufferr" << bufferSize << std::endl;
+        #endif
         if (index_start + range > bufferSize)
         {
             std::ostringstream oss;
@@ -252,8 +254,10 @@ public:
 
     ColTableField(std::string k, format f, const std::type_info &t)
         : key(k), Format(f), expected_type(t)
-    {
+    {   
+        #ifdef DEBUG
         std::cout << expected_type.name() << std::endl;
+        #endif
     }
 
     virtual ~ColTableField() = default;
@@ -573,9 +577,11 @@ public:
                 int64_t offset_start = ptr[indices[depth]];
                 
                 std::vector<int64_t> child_indices = indices;
+                #ifdef DEBUG
                 for (int i=0;i<=start_index;i++){
                     std::cout<<"START_INDEX"<<ptr[i]<<std::endl;
                 }
+                #endif
                 int64_t elements_inserted = 0;
                 if (o_data && o_data_size > 0) {
                     elements_inserted = o_data[o_data_size - 1] - o_data[0];
@@ -598,17 +604,42 @@ public:
                     {
                         shifted_o_data[i] += offset_start;
                     }
+                    #ifdef DEBUG
                     for (int i=0;i<shifted_o_data.size();i++){
                         std::cout<<"Shifted_o_data"<<shifted_o_data[i]<<std::endl;
                     }
+                    #endif
                     offsetBuffer->insert_at((start_index + 1) * sizeof(int64_t),
                                             shifted_o_data.data(), 
                                             (o_data_size) * sizeof(int64_t));
                 }
+                #ifdef DEBUG
                 std::cout<<"original length"<<length<<std::endl;
+                #endif
                 length += (o_data_size);
+                #ifdef DEBUG
                 std::cout<<"new length"<<length<<std::endl;
-                children[0]->insert_at(child_indices, v_data, v_data_size, o_data, o_data_size, depth + 1);
+                #endif
+                if (children[0]->offsetBuffer && children[0]->valueBuffer) {
+                    // child is STRING column
+                    children[0]->insert_at(
+                        child_indices,
+                        v_data,
+                        v_data_size,
+                        nullptr,
+                        0,
+                        depth + 1
+                    );
+                } else {
+                    children[0]->insert_at(
+                        child_indices,
+                        v_data,
+                        v_data_size,
+                        o_data,
+                        o_data_size,
+                        depth + 1
+                    );
+                }
                 
             }
             else if (!children.empty())
@@ -660,12 +691,15 @@ public:
                             ptr[i] -= offset_range;
                         }
                     }
+                    #ifdef DEBUG
                     std::cout << "offset_start" << offset_start << std::endl;
                     std::cout << "offset_end" << offset_end << std::endl;
                     std::cout << "offset_range" << offset_range << std::endl;
+                    #endif
                     offsetBuffer->remove_at((start_index + 1) * sizeof(int64_t), range * sizeof(int64_t));
-
+                    #ifdef DEBUG
                     std::cout << "offset_range" << offset_range << std::endl;
+                    #endif
                     valueBuffer->remove_at(offset_start, offset_range);
                 }
                 else if (!offsetBuffer && children.empty())
@@ -692,27 +726,38 @@ public:
                     int64_t length = offsetBuffer_ptr[length];
                     int64_t count = 0;
                     for (size_t i = 0; i < length; ++i) {
+                        #ifdef DEBUG
                         std::cout << ptr[i] << (i == offsetBuffer_ptr[count]-1 ? ", " : "");
                         std::cout << offsetBuffer_ptr[count] << (i == offsetBuffer_ptr[count]-1 ? ", " : "");
+                        #endif
                         if (offsetBuffer_ptr[count] < i) {
                             count += 1;
                         }
                     }
                     length = length+1;
                     count = 0;
+                    #ifdef DEBUG
                     std::cout <<std::endl;
                     std::cout <<"OffsetBuffer"<<length<<std::endl;
+                    #endif
                     for (size_t i = 0; i < length; ++i) {
+                        #ifdef DEBUG
                         std::cout << offsetBuffer_ptr[i] << ", ";
+                        #endif
                         if (offsetBuffer_ptr[count] < i) {
                             count += 1;
                         }
                     }
+                    
                 }else{
                 double* ptr = static_cast<double*>(valueBuffer->get());
+                #ifdef DEBUG
                 for (size_t i = 0; i < length; ++i) {
                     std::cout << ptr[i] << (i == length - 1 ? "" : ", ");
-                }}
+                }
+                #endif
+                }
+                
                 throw std::runtime_error(oss.str());
                 return;
             }
@@ -726,18 +771,20 @@ public:
                 // AoA
                 //offsetbuffer ptr
                 int64_t *ptr = static_cast<int64_t *>(offsetBuffer->get());
-
+                #ifdef DEBUG
                 //calculate offset start,end,range from offsetbuffer
                 for (int i=0;i<=start_index+range;i++){
                     std::cout<<"START_INDEX"<<ptr[i]<<std::endl;
                 }
+                #endif
                 int64_t offset_start = ptr[start_index];//should this is wrong, what will be the offset_start
                 int64_t offset_end = ptr[start_index + range];
                 int64_t offset_range = offset_end - offset_start;
-
+                #ifdef DEBUG
                 std::cout << "offset_start" << offset_start << std::endl;
                 std::cout << "offset_end" << offset_end << std::endl;
                 std::cout << "offset_range" << offset_range << std::endl;
+                #endif
                 std::vector<int64_t> child_indices = indices;
                 
                 if (depth + 1 < child_indices.size())
@@ -748,9 +795,11 @@ public:
                 {
                     child_indices.push_back(offset_start);
                 }
+                #ifdef DEBUG
                 for (int i=0;i<child_indices.size();i++){
                     std::cout<<"CHILD_INDICES"<<child_indices[i]<<std::endl;
                 }
+                #endif
 
                 //remove value from child
                 children[0]->remove_at(child_indices, offset_range, depth + 1);
@@ -769,10 +818,13 @@ public:
                         ptr[i] -= offset_range;
                     }
                 }
-
+                #ifdef DEBUG
                 std::cout<<"original length"<<length<<std::endl;
+                #endif
                 length -= range;
+                #ifdef DEBUG
                 std::cout<<"new length"<<length<<std::endl;
+                #endif
             }
             else if (!children.empty())
             {
@@ -1234,6 +1286,9 @@ public:
         }
     }
     template <typename T>
+    static format getFormat();
+
+    template <typename T>
     static ColTable FromVector(const std::vector<T> &vec);
 
     static ColTable FromStruct(const std::vector<ColTable> &members, std::vector<std::string> keys);
@@ -1262,7 +1317,7 @@ public:
             if (field->children[i] && field->children[i]->key == key)
             {
                 // Return a new ColTable wrapper pointing to the child buffers
-                return std::make_shared<ColTable>(field->children[i], data->children[i], typeid(field->children[i]->expected_type));
+                return std::make_shared<ColTable>(field->children[i], data->children[i], field->children[i]->expected_type);
             }
         }
         throw std::runtime_error("Column key not found in schema: " + key);
@@ -1414,7 +1469,7 @@ inline void ColTable::convertToArray(std::shared_ptr<ColTable> table, std::vecto
     const int64_t *offsetBuffer = static_cast<const int64_t *>(offsetPtr->get());
     size_t count = data->length;
 
-    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], typeid(table->getField()->children[0]->expected_type));
+    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], table->getField()->children[0]->expected_type);
 
     // Recursively call convertToArray using the out-parameter for the 1D flat vector
     std::vector<T> flatVec;
@@ -1513,412 +1568,73 @@ inline void ColTable::convertToStruct(std::shared_ptr<ColTable> table, std::vect
 
     for (int i = 0; i < data->nChildren; i++)
     {
-        outResult.push_back(ColTable(field->children[i], data->children[i], typeid(field->children[i]->expected_type)));
+        outResult.push_back(ColTable(field->children[i], data->children[i], field->children[i]->expected_type));
     }
 }
-// --- Explicitly Sized Signed Integers ---
 
-template <>
-inline ColTable ColTable::FromVector<int8_t>(const std::vector<int8_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("INT8", format::INT8, typeid(int8_t));
-    size_t byteSize = vec.size() * sizeof(int8_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
+template <> inline format ColTable::getFormat<int8_t>()   { return format::INT8; }
+template <> inline format ColTable::getFormat<int16_t>()  { return format::INT16; }
+template <> inline format ColTable::getFormat<int32_t>()  { return format::INT32; }
+template <> inline format ColTable::getFormat<int64_t>()  { return format::INT64; }
+
+template <> inline format ColTable::getFormat<long long>() { return format::LONG_LONG;}
+template <> inline format ColTable::getFormat<unsigned long long>() { return format::UNSIGNED_LONG_LONG;}
+
+template <> inline format ColTable::getFormat<uint8_t>()  { return format::UINT8; }
+template <> inline format ColTable::getFormat<uint16_t>() { return format::UINT16; }
+template <> inline format ColTable::getFormat<uint32_t>() { return format::UINT32; }
+template <> inline format ColTable::getFormat<uint64_t>() { return format::UINT64; }
+
+template <> inline format ColTable::getFormat<float>()    { return format::FLOAT; }
+template <> inline format ColTable::getFormat<double>()   { return format::DOUBLE; }
+template <> inline format ColTable::getFormat<bool>()     { return format::BOOL; }
+
+template <typename T>
+ColTable ColTable::FromVector(const std::vector<T>& vec) {
+    auto field = std::make_shared<ColTableField>("", getFormat<T>(),
+        typeid(T));
     auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(int8_t));
-}
 
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<int8_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    int8_t *buffer = static_cast<int8_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<int16_t>(const std::vector<int16_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("INT16", format::INT16, typeid(int16_t));
-    size_t byteSize = vec.size() * sizeof(int16_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
+    auto buffer = std::make_shared<Buffer>(vec.size() * sizeof(T));
+    if constexpr (std::is_same_v<T,bool>){
+        std::vector<uint8_t> booldata;
+        for (int i=0;i<vec.size();i++){
+            booldata.push_back(vec[i]);
+        }
+        std::memcpy(buffer->get(), booldata.data(), vec.size() * sizeof(T));
+    }else{
+        std::memcpy(buffer->get(), vec.data(), vec.size() * sizeof(T));
     }
-    auto data = std::make_shared<ColTableData>(vec.size());
+
     data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(int16_t));
+
+    return ColTable(field, data,
+        typeid(T));
 }
 
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<int16_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
+template <typename T>
+void ColTable::convertToArray(
+    std::shared_ptr<ColTable> colTable,
+    std::vector<T>& outResult
+) {
+    auto data = colTable->getData();
 
-    int16_t *buffer = static_cast<int16_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
+    outResult.resize(data->length);
 
-template <>
-inline ColTable ColTable::FromVector<int32_t>(const std::vector<int32_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("INT32", format::INT32, typeid(int32_t));
-    size_t byteSize = vec.size() * sizeof(int32_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
+    auto buffer = static_cast<T*>(data->valueBuffer->get());
+
+    if constexpr (std::is_same_v<T, bool>) {
+        for (size_t i = 0; i < data->length; ++i) {
+            outResult[i] = buffer[i];
+        }
+    } else {
+        std::memcpy(
+            outResult.data(),
+            buffer,
+            data->length * sizeof(T)
+        );
     }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(int32_t));
 }
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<int32_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    int32_t *buffer = static_cast<int32_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<int64_t>(const std::vector<int64_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("INT64", format::INT64, typeid(int64_t));
-    size_t byteSize = vec.size() * sizeof(int64_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(int64_t));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<int64_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    int64_t *buffer = static_cast<int64_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-template <>
-inline ColTable ColTable::FromVector<bool>(const std::vector<bool> &vec)
-{
-    auto field = std::make_shared<ColTableField>("BOOL", format::BOOL, typeid(bool));
-    size_t byteSize = vec.size();
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    bool *ptr = static_cast<bool *>(buffer->get());
-    int64_t i = 0;
-    for (bool v : vec)
-    {
-        // write to buffer
-        ptr[i++] = v ? 1 : 0;
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(bool));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<bool> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    bool *buffer = static_cast<bool *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-// --- C++ Native Signed Integers ---
-
-template <>
-inline ColTable ColTable::FromVector<long long>(const std::vector<long long> &vec)
-{
-    auto field = std::make_shared<ColTableField>("LONG_LONG", format::LONG_LONG, typeid(long long));
-    size_t byteSize = vec.size() * sizeof(long long);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(long long));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<long long> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    long long *buffer = static_cast<long long *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-// --- Explicitly Sized Unsigned Integers ---
-
-template <>
-inline ColTable ColTable::FromVector<uint8_t>(const std::vector<uint8_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("UINT8", format::UINT8, typeid(uint8_t));
-    size_t byteSize = vec.size() * sizeof(uint8_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(uint8_t));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<uint8_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    uint8_t *buffer = static_cast<uint8_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<uint16_t>(const std::vector<uint16_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("UINT16", format::UINT16, typeid(uint16_t));
-    size_t byteSize = vec.size() * sizeof(uint16_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(uint16_t));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<uint16_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    uint16_t *buffer = static_cast<uint16_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<uint32_t>(const std::vector<uint32_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("UINT32", format::UINT32, typeid(uint32_t));
-    size_t byteSize = vec.size() * sizeof(uint32_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(uint32_t));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<uint32_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    uint32_t *buffer = static_cast<uint32_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<uint64_t>(const std::vector<uint64_t> &vec)
-{
-    auto field = std::make_shared<ColTableField>("UINT64", format::UINT64, typeid(uint64_t));
-    size_t byteSize = vec.size() * sizeof(uint64_t);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(uint64_t));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<uint64_t> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    uint64_t *buffer = static_cast<uint64_t *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-// --- C++ Native Unsigned Integers ---
-
-template <>
-inline ColTable ColTable::FromVector<unsigned long long>(const std::vector<unsigned long long> &vec)
-{
-    auto field = std::make_shared<ColTableField>("UNSIGNED_LONG_LONG", format::UNSIGNED_LONG_LONG, typeid(long long));
-    size_t byteSize = vec.size() * sizeof(unsigned long long);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(unsigned long long));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<unsigned long long> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    unsigned long long *buffer = static_cast<unsigned long long *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-// --- Floating Point ---
-
-template <>
-inline ColTable ColTable::FromVector<float>(const std::vector<float> &vec)
-{
-    auto field = std::make_shared<ColTableField>("FLOAT", format::FLOAT, typeid(float));
-    size_t byteSize = vec.size() * sizeof(float);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(float));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<float> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    float *buffer = static_cast<float *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
-template <>
-inline ColTable ColTable::FromVector<double>(const std::vector<double> &vec)
-{
-    auto field = std::make_shared<ColTableField>("DOUBLE", format::DOUBLE, typeid(double));
-    size_t byteSize = vec.size() * sizeof(double);
-    auto buffer = std::make_shared<Buffer>(byteSize);
-    if (byteSize > 0) {
-        std::memcpy(buffer->get(), vec.data(), byteSize);
-    }
-    auto data = std::make_shared<ColTableData>(vec.size());
-    data->addBuffer(buffer);
-    data->nullCount = -1;
-    return ColTable(field, data, typeid(double));
-}
-
-template <>
-inline void ColTable::convertToArray(std::shared_ptr<ColTable> colTable, std::vector<double> &outResult)
-{
-    outResult.clear();
-    auto dataPtr = colTable->getData()->valueBuffer;
-    if (!dataPtr)
-        return;
-
-    double *buffer = static_cast<double *>(dataPtr->get());
-    size_t count = colTable->getData()->length;
-    outResult.resize(count);
-    for (size_t i = 0; i < count; i++)
-        outResult[i] = buffer[i];
-}
-
 // --- Strings ---
 
 static size_t getLength(const std::vector<std::optional<std::string>> &vec)
@@ -2031,7 +1747,7 @@ inline void ColTable::convertToArray(std::shared_ptr<ColTable> table, std::list<
         return;
 
     // 2. Reconstruct the 1D child table that actually holds the flat data
-    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], typeid(table->getField()->children[0]->expected_type));
+    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], table->getField()->children[0]->expected_type);
 
     // 3. Extract the flat data into a temporary vector using your existing 1D function
     std::vector<T> tempVec;
@@ -2135,7 +1851,7 @@ inline void ColTable::convertToArray(std::shared_ptr<ColTable> table, std::vecto
     const int64_t *offsetBuffer = static_cast<const int64_t *>(offsetPtr->get());
     size_t count = data->length;
 
-    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], typeid(table->getField()->children[0]->expected_type));
+    auto childTable = std::make_shared<ColTable>(table->getField()->children[0], data->children[0], table->getField()->children[0]->expected_type);
 
     // 2. Recursively extract the 1D flat vector
     std::vector<T> flatVec;
