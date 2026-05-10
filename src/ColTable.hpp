@@ -88,7 +88,7 @@ public:
 
     Buffer(size_t size) : bufferSize(size)
     {
-        capacity = size;
+        capacity = (size == 0) ? 1 : size * 2;
         // Alignment for padding
         size_t alignment = 64;
         // Size of buffer + end padding + size of pointer to store the address of the aligned_ptr
@@ -113,6 +113,7 @@ public:
         std::swap(other.aligned_ptr, aligned_ptr);
         std::swap(other.buffer, buffer);
         std::swap(other.bufferSize, bufferSize);
+        std::swap(other.capacity, capacity);
     }
     // Move assignment operator
     Buffer &operator=(Buffer &&other)
@@ -123,6 +124,7 @@ public:
             std::swap(aligned_ptr, other.aligned_ptr);
             std::swap(buffer, other.buffer);
             std::swap(bufferSize, other.bufferSize);
+            std::swap(other.capacity, capacity);
         }
         return *this;
     }
@@ -135,12 +137,17 @@ public:
         }
     }
     void insert_at(size_t start_index, void *data, size_t input_size)
-    {
+    {   
+        
         if (input_size == 0)
             return;
+        if (start_index > bufferSize)
+        {
+            throw std::runtime_error("Buffer::insert_at start_index > bufferSize");
+        }
         int64_t new_bufferSize = input_size + bufferSize;
         if (new_bufferSize > capacity)
-        {
+        {   
             Buffer next(new_bufferSize);
             uint8_t *target = static_cast<uint8_t *>(next.get());
             uint8_t *old_src = static_cast<uint8_t *>(aligned_ptr);
