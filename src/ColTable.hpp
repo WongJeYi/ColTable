@@ -571,76 +571,103 @@ public:
                 // AoA
                 // AoA flattened the child into first child, and the parent will contain offsetBuffer and one child
                 // get the offset of offsetbuffer
-                
+           
                 int64_t *ptr = static_cast<int64_t *>(offsetBuffer->get());
-                
-                int64_t offset_start = ptr[indices[depth]];
-                
+
+                int64_t offset_start = ptr[start_index];
+
                 std::vector<int64_t> child_indices = indices;
-                #ifdef DEBUG
-                for (int i=0;i<=start_index;i++){
-                    std::cout<<"START_INDEX"<<ptr[i]<<std::endl;
+
+                if (depth + 1 < child_indices.size())
+                {
+                    child_indices[depth + 1] = offset_start;
                 }
-                #endif
+                else
+                {
+                    child_indices.push_back(offset_start);
+                }
+
+            #ifdef DEBUG
+                for (int i = 0; i <= start_index; i++)
+                {
+                    std::cout << "START_INDEX" << ptr[i] << std::endl;
+                }
+            #endif
+
                 int64_t elements_inserted = 0;
-                if (o_data && o_data_size > 0) {
-                    elements_inserted = o_data[o_data_size - 1] - o_data[0];
+
+                if (o_data && o_data_size > 0)
+                {
+                    // Your o_data is [row1_count, row1+row2_count, ...]
+                    // Example: [50, 80]
+                    // So total inserted child elements is the last value.
+                    elements_inserted = o_data[o_data_size - 1];
                 }
 
                 if (start_index < length)
                 {
-                    for (size_t i = start_index; i < length + 1; ++i)
+                    // Do not shift ptr[start_index].
+                    // It is the insertion anchor.
+                    for (size_t i = start_index + 1; i < length + 1; ++i)
                     {
-                        // 2. Shift by element count, NOT byte count (v_data_size)
-                        ptr[i] += elements_inserted; 
+                        ptr[i] += elements_inserted;
                     }
                 }
+
                 if (o_data && o_data_size > 0)
                 {
-                    // Create a local copy so we don't corrupt the original array
                     std::vector<int64_t> shifted_o_data(o_data, o_data + o_data_size);
-                    
+
                     for (size_t i = 0; i < o_data_size; i++)
                     {
                         shifted_o_data[i] += offset_start;
                     }
-                    #ifdef DEBUG
-                    for (int i=0;i<shifted_o_data.size();i++){
-                        std::cout<<"Shifted_o_data"<<shifted_o_data[i]<<std::endl;
+
+            #ifdef DEBUG
+                    for (int i = 0; i < shifted_o_data.size(); i++)
+                    {
+                        std::cout << "Shifted_o_data" << shifted_o_data[i] << std::endl;
                     }
-                    #endif
-                    offsetBuffer->insert_at((start_index + 1) * sizeof(int64_t),
-                                            shifted_o_data.data(), 
-                                            (o_data_size) * sizeof(int64_t));
+            #endif
+
+                    offsetBuffer->insert_at(
+                        (start_index + 1) * sizeof(int64_t),
+                        shifted_o_data.data(),
+                        shifted_o_data.size() * sizeof(int64_t)
+                    );
                 }
-                #ifdef DEBUG
-                std::cout<<"original length"<<length<<std::endl;
-                #endif
-                length += (o_data_size);
-                #ifdef DEBUG
-                std::cout<<"new length"<<length<<std::endl;
-                #endif
-                if (children[0]->offsetBuffer && children[0]->valueBuffer) {
-                    // child is STRING column
+
+            #ifdef DEBUG
+                std::cout << "original length" << length << std::endl;
+            #endif
+
+                length += o_data_size;
+
+            #ifdef DEBUG
+                std::cout << "new length" << length << std::endl;
+            #endif
+
+                if (children[0]->offsetBuffer && children[0]->valueBuffer)
+                {
+                    // Do not handle AoA<string> here.
+                    // Use the special 2D string overload.
+                    throw std::runtime_error(
+                        "AoA<string> insert should use the dedicated 2D string insert path"
+                    );
+                }
+                else
+                {
+                    // Child is primitive flat value column.
+                    // Pass elements_inserted as o_data_size so primitive insert can calculate element size.
                     children[0]->insert_at(
                         child_indices,
                         v_data,
                         v_data_size,
                         nullptr,
-                        0,
-                        depth + 1
-                    );
-                } else {
-                    children[0]->insert_at(
-                        child_indices,
-                        v_data,
-                        v_data_size,
-                        o_data,
-                        o_data_size,
+                        elements_inserted,
                         depth + 1
                     );
                 }
-                
             }
             else if (!children.empty())
             {
