@@ -1,6 +1,6 @@
 #ifndef COLTABLE_INTERFACE
 #define COLTABLE_INTERFACE
-
+#define DEBUG 1
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -1074,6 +1074,116 @@ public:
             flat_buffer.size(),
             offsets.data(),
             offsets.size());
+    }
+    void insert_at(
+        std::vector<int64_t>& indices,
+        std::vector<std::vector<std::optional<std::string>>>& vec
+    ) {
+        if (this->field->Format != format::AoA) {
+            throw std::runtime_error("insert_at 2D string requires AoA table");
+        }
+
+        if (this->data->children.empty() || !this->data->children[0]) {
+            throw std::runtime_error("AoA string table missing child data");
+        }
+
+        if (this->field->children.empty() || !this->field->children[0]) {
+            throw std::runtime_error("AoA string table missing child field");
+        }
+
+        if (this->field->children[0]->Format != format::STRING) {
+            throw std::runtime_error("insert_at 2D string requires STRING child");
+        }
+
+        int64_t start_index = indices.empty() ? 0 : indices[0];
+
+        if (start_index < 0) {
+            start_index = 0;
+        }
+
+        if (start_index > static_cast<int64_t>(this->data->length)) {
+            start_index = static_cast<int64_t>(this->data->length);
+        }
+
+        // ============================================================
+        // 1. Build AoA parent offsets and flattened string vector
+        // ============================================================
+
+        std::vector<std::optional<std::string>> flat_strings;
+        std::vector<int64_t> parent_offsets;
+
+        parent_offsets.reserve(vec.size());
+
+        int64_t string_count = 0;
+
+        for (const auto& row : vec) {
+            for (const auto& s : row) {
+                flat_strings.push_back(s);
+                string_count++;
+            }
+
+            // AoA parent offset = cumulative number of strings
+            parent_offsets.push_back(string_count);
+        }
+
+        size_t rows_inserted = vec.size();
+        int64_t strings_inserted = string_count;
+
+        if (rows_inserted == 0) {
+            return;
+        }
+
+        // ============================================================
+        // 2. Update AoA parent offsetBuffer
+        // ============================================================
+
+        int64_t* parent_ptr =
+            static_cast<int64_t*>(this->data->offsetBuffer->get());
+
+        size_t old_parent_length = this->data->length;
+
+        // This is where the inserted strings begin in child string column
+        int64_t child_start = parent_ptr[start_index];
+
+        std::vector<int64_t> shifted_parent_offsets;
+        shifted_parent_offsets.reserve(parent_offsets.size());
+
+        for (auto off : parent_offsets) {
+            shifted_parent_offsets.push_back(off + child_start);
+        }
+
+        this->data->offsetBuffer->insert_at(
+            (start_index + 1) * sizeof(int64_t),
+            shifted_parent_offsets.data(),
+            shifted_parent_offsets.size() * sizeof(int64_t)
+        );
+
+        // Re-fetch because insert_at may move memory
+        parent_ptr =
+            static_cast<int64_t*>(this->data->offsetBuffer->get());
+
+        // Shift old trailing offsets by number of inserted strings
+        for (size_t i = start_index + 1 + rows_inserted;
+            i <= old_parent_length + rows_inserted;
+            ++i) {
+            parent_ptr[i] += strings_inserted;
+        }
+
+        this->data->length += rows_inserted;
+
+        // ============================================================
+        // 3. Let existing 1D string insert handle child string offsets
+        // ============================================================
+
+        ColTable child_table(
+            this->field->children[0],
+            this->data->children[0],
+            this->field->children[0]->expected_type
+        );
+
+        std::vector<int64_t> child_indices = { child_start };
+
+        child_table.insert_at(child_indices, flat_strings);
     }
     // For primitives
     template <typename T>
