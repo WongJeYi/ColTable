@@ -96,25 +96,196 @@ void bind_coltable_factory(py::class_<ColTable, std::shared_ptr<ColTable>> &ct, 
               }
           }
     }, py::arg("key"), "Sync the length of the Struct table with its child");
-     
+    ct.def(("matrix_view_" + suffix).c_str(),
+        [](const ColTable& self) -> View<T> {
+            auto data = self.getData();
+
+            if (!data) {
+                throw std::runtime_error("Null data");
+            }
+
+            if (!data->offsetBuffer || data->children.empty()) {
+                throw std::runtime_error("matrix_view only supports AoA table");
+            }
+
+            auto child = data->children[0];
+
+            if (!child || !child->valueBuffer) {
+                throw std::runtime_error("AoA child has no value buffer");
+            }
+
+            auto* values = static_cast<T*>(child->valueBuffer->get());
+            auto* offsets = static_cast<int64_t*>(data->offsetBuffer->get());
+
+            return View<T>(
+                values,
+                child->length,
+                offsets,
+                data->length,
+                child->valueBuffer,
+                data->offsetBuffer
+            );
+        }
+    );
+    ct.def("dummy_double",
+        [](int64_t i, int64_t j) -> double {
+            return 1.0;
+        }
+    );
+    ct.def(("to_python_matrix_" + suffix).c_str(),
+        [](const ColTable& self) -> py::list {
+            auto data = self.getData();
+
+            if (!data || !data->offsetBuffer || data->children.empty()) {
+                throw std::runtime_error("to_python_matrix only supports AoA table");
+            }
+
+            auto child = data->children[0];
+
+            if (!child || !child->valueBuffer) {
+                throw std::runtime_error("AoA child has no value buffer");
+            }
+
+            auto* offsets = static_cast<int64_t*>(data->offsetBuffer->get());
+            auto* values = static_cast<T*>(child->valueBuffer->get());
+
+            py::list rows;
+
+            for (size_t i = 0; i < data->length; ++i) {
+                py::list row;
+
+                int64_t start = offsets[i];
+                int64_t end = offsets[i + 1];
+
+                for (int64_t j = start; j < end; ++j) {
+                    row.append(values[j]);
+                }
+
+                rows.append(row);
+            }
+
+            return rows;
+        }
+    );
+    ct.def(("values_buffer_" + suffix).c_str(),
+        [](const ColTable& self) -> FlatBufferView<T> {
+            auto data = self.getData();
+
+            if (!data) {
+                throw std::runtime_error("Null data");
+            }
+
+            // For AoA, flattened values are in child[0]
+            if (!data->children.empty()) {
+                data = data->children[0];
+            }
+
+            if (!data || !data->valueBuffer) {
+                throw std::runtime_error("No value buffer");
+            }
+
+            auto* values = static_cast<T*>(data->valueBuffer->get());
+
+            return FlatBufferView<T>(
+                values,
+                data->length,
+                data->valueBuffer
+            );
+        }
+    );
+    ct.def("offsets_buffer",
+        [](const ColTable& self) -> FlatBufferView<int64_t> {
+            auto data = self.getData();
+
+            if (!data || !data->offsetBuffer) {
+                throw std::runtime_error("No offset buffer");
+            }
+
+            auto* offsets = static_cast<int64_t*>(data->offsetBuffer->get());
+
+            return FlatBufferView<int64_t>(
+                offsets,
+                data->length + 1,
+                data->offsetBuffer
+            );
+        }
+    );
 
 }
-
-#define BIND_CT_TYPE(type, name) bind_coltable_factory<type>(ct, name);
-
 template <typename T>
-void bind_view(py::module &m, const std::string &name) {
-    py::class_<View<T>>(m, name.c_str(), py::buffer_protocol())
-        .def("__getitem__", [](View<T> &v, size_t j) {
-            if (j >= v.length) throw py::index_error();
-            return v.data[j]; 
+void bind_flat_buffer_view(py::module_& m, const std::string& name)
+{
+    py::class_<FlatBufferView<T>>(m, name.c_str(), py::buffer_protocol())
+        .def("__len__", [](const FlatBufferView<T>& v) {
+            return static_cast<py::ssize_t>(v.length);
         })
-        .def("__len__", [](View<T> &v) { return v.length; })
-        .def_buffer([](View<T> &v) -> py::buffer_info {
+
+        .def_property_readonly("address", [](const FlatBufferView<T>& v) {
+            return reinterpret_cast<std::uintptr_t>(v.data);
+        })
+
+        .def_buffer([](FlatBufferView<T>& v) -> py::buffer_info {
+            if (!v.data) {
+                throw std::runtime_error("Cannot create buffer from null pointer");
+            }
+
             return py::buffer_info(
-                v.data, sizeof(T),
+                v.data,
+                sizeof(T),
                 py::format_descriptor<T>::format(),
-                1, { (ssize_t)v.length }, { (ssize_t)sizeof(T) }
+                1,
+                { static_cast<py::ssize_t>(v.length) },
+                { static_cast<py::ssize_t>(sizeof(T)) }
+            );
+        });
+}
+#define BIND_CT_TYPE(type, name) bind_coltable_factory<type>(ct, name);
+template <typename T>
+void bind_view(py::module_& m, const std::string& name)
+{   
+    py::class_<View<T>>(m, name.c_str(),py::buffer_protocol())
+        .def("__getitem__", [](const View<T>& v, py::tuple key) -> T {
+            if (key.size() != 2) {
+                throw py::index_error("Expected view[i, j]");
+            }
+
+            int64_t i = key[0].cast<int64_t>();
+            int64_t j = key[1].cast<int64_t>();
+
+            return v.get(i, j);
+        })
+        .def("get", &View<T>::get)
+        .def("__call__", &View<T>::get)
+        .def("__iter__", [](View<T>& v) {
+            if (!v.values) {
+                throw std::runtime_error("Cannot iterate empty View");
+            }
+
+            return py::make_iterator(
+                v.values,
+                v.values + v.total_length
+            );
+        }, py::keep_alive<0, 1>())
+        .def_property_readonly("rows", [](const View<T>& v) {
+            return static_cast<py::ssize_t>(v.rows);
+        })
+
+        .def_property_readonly("total_length", [](const View<T>& v) {
+            return static_cast<py::ssize_t>(v.total_length);
+        })
+
+        .def_buffer([](View<T>& v) -> py::buffer_info {
+            if (!v.values) {
+                throw std::runtime_error("Cannot create buffer from empty View");
+            }
+
+            return py::buffer_info(
+                v.values,
+                sizeof(T),
+                py::format_descriptor<T>::format(),
+                1,
+                { static_cast<py::ssize_t>(v.total_length) },
+                { static_cast<py::ssize_t>(sizeof(T)) }
             );
         });
 }
@@ -154,7 +325,10 @@ PYBIND11_MODULE(_ColTable, m) {
     bind_view<uint16_t>(m, "ViewUInt16");
     bind_view<uint32_t>(m, "ViewUInt32");
     bind_view<uint64_t>(m, "ViewUInt64");
-
+    bind_flat_buffer_view<double>(m, "DoubleBufferView");
+    bind_flat_buffer_view<float>(m, "FloatBufferView");
+    bind_flat_buffer_view<int64_t>(m, "LongBufferView");
+    bind_flat_buffer_view<bool>(m, "BoolBufferView");
     // --- C++ Native Signed Integers ---
     //bind_view<short>(m, "ViewShort");
     //bind_view<long>(m, "ViewLong");
@@ -276,49 +450,7 @@ PYBIND11_MODULE(_ColTable, m) {
         }, py::arg("indices"),py::arg("range"),
         "Removes rows starting at the given indices.")
       .def("sync_length", &ColTable::sync_length_with_children)
-      .def("__getitem__", [](ColTable &self, int64_t i) -> py::object {
-            if (i < 0 || i >= (int64_t)self.data->length) throw py::index_error();
-
-            // This assumes you have a way to access the column format from the data object
-            // If not, you might store 'format' inside ColTableData during construction
-            switch (self.field->Format) {
-                case format::BOOL:      return py::cast(self.operator[]<bool>(i));
-                case format::INT8:      return py::cast(self.operator[]<int8_t>(i));
-                case format::INT16:     return py::cast(self.operator[]<int16_t>(i));
-                case format::INT32:     return py::cast(self.operator[]<int32_t>(i));
-                case format::INT64:     return py::cast(self.operator[]<int64_t>(i));
-                case format::UINT8:     return py::cast(self.operator[]<uint8_t>(i));
-                case format::UINT16:    return py::cast(self.operator[]<uint16_t>(i));
-                case format::UINT32:    return py::cast(self.operator[]<uint32_t>(i));
-                case format::UINT64:    return py::cast(self.operator[]<uint64_t>(i));
-                case format::FLOAT:     return py::cast(self.operator[]<float>(i));
-                case format::DOUBLE:    return py::cast(self.operator[]<double>(i));
-                case format::AoA: {
-                    if (self.field->children.empty() || self.field->children[0] == nullptr) {
-                        throw std::runtime_error("AoA column is missing its inner child schema");
-                    }
-                    switch (self.field->children[0]->Format) {
-                        case format::BOOL:      return py::cast(self.operator[]<bool>(i));
-                        case format::INT8:      return py::cast(self.operator[]<int8_t>(i));
-                        case format::INT16:     return py::cast(self.operator[]<int16_t>(i));
-                        case format::INT32:     return py::cast(self.operator[]<int32_t>(i));
-                        case format::INT64:     return py::cast(self.operator[]<int64_t>(i));
-                        case format::UINT8:     return py::cast(self.operator[]<uint8_t>(i));
-                        case format::UINT16:    return py::cast(self.operator[]<uint16_t>(i));
-                        case format::UINT32:    return py::cast(self.operator[]<uint32_t>(i));
-                        case format::UINT64:    return py::cast(self.operator[]<uint64_t>(i));
-                        case format::FLOAT:     return py::cast(self.operator[]<float>(i));
-                        case format::DOUBLE:    return py::cast(self.operator[]<double>(i));
-                        
-                        default:
-                            throw std::runtime_error("Unsupported inner type for AoA indexing");
-                    }
-                }
-                default:
-                    throw std::runtime_error("Unsupported format for indexing");
-            }
-        }, py::keep_alive<0, 1>())
-        .def("get_string_view", [](ColTable &self) {
+      .def("get_string_view", [](ColTable &self) {
             return StringView{
                 static_cast<char*>(self.data->valueBuffer->get()),
                 static_cast<int64_t*>(self.data->offsetBuffer->get()),
@@ -447,6 +579,7 @@ PYBIND11_MODULE(_ColTable, m) {
         ColTable::convertToStruct(table, columns);
         return columns;
     });
+
 
 
 
