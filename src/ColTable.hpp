@@ -1,6 +1,6 @@
 #ifndef COLTABLE_INTERFACE
 #define COLTABLE_INTERFACE
-#define DEBUG 1
+
 #include <iostream>
 #include <cstdlib>
 #include <cstdint>
@@ -13,6 +13,7 @@
 #include <sstream>
 #include <typeindex>
 #include <typeinfo>
+#include <numeric>
 
 // Overload the << operator for ANY std::optional
 template <typename T>
@@ -368,13 +369,85 @@ public:
         }
     }
 };
-
 template <typename T>
-struct View
-{
-    T *data;       // The starting address (base + offset)
-    size_t length; // How many elements
-    operator bool() const { return data != nullptr; }
+struct FlatBufferView {
+    T* data = nullptr;
+    size_t length = 0;
+    std::shared_ptr<Buffer> owner;
+
+    FlatBufferView() = default;
+
+    FlatBufferView(
+        T* data_,
+        size_t length_,
+        std::shared_ptr<Buffer> owner_
+    )
+        : data(data_),
+          length(length_),
+          owner(std::move(owner_))
+    {}
+};
+template <typename T>
+struct View {
+    T* values = nullptr;
+    size_t rows = 0;
+    size_t total_length = 0;
+
+    std::vector<int64_t> row_starts;
+    std::vector<int64_t> row_lengths;
+
+    std::shared_ptr<Buffer> value_owner;
+    std::shared_ptr<Buffer> offset_owner;
+
+    View() = default;
+
+    View(
+        T* values_,
+        size_t total_length_,
+        int64_t* offsets,
+        size_t rows_,
+        std::shared_ptr<Buffer> value_owner_,
+        std::shared_ptr<Buffer> offset_owner_
+    )
+        : values(values_),
+          rows(rows_),
+          total_length(total_length_),
+          value_owner(std::move(value_owner_)),
+          offset_owner(std::move(offset_owner_))
+    {   
+        std::cout << "View constructor\n";
+        row_starts.resize(rows);
+        row_lengths.resize(rows);
+
+        for (size_t i = 0; i < rows; ++i) {
+            row_starts[i] = offsets[i];
+            row_lengths[i] = offsets[i + 1] - offsets[i];
+        }
+    }
+
+    T get(int64_t i, int64_t j) const {
+        int64_t nrows = static_cast<int64_t>(rows);
+
+        if (i < 0) {
+            i += nrows;
+        }
+
+        if (i < 0 || i >= nrows) {
+            throw std::out_of_range("row index out of range");
+        }
+
+        int64_t row_len = row_lengths[i];
+
+        if (j < 0) {
+            j += row_len;
+        }
+
+        if (j < 0 || j >= row_len) {
+            throw std::out_of_range("column index out of range");
+        }
+
+        return values[row_starts[i] + j];
+    }
 };
 struct StringView
 {
@@ -1004,55 +1077,86 @@ public:
     }
     
     template <typename T>
-    View<T> operator[](int64_t index) const
+    View<T> make_view(int64_t index) const
     {
-        if (index < 0 || index >= (int64_t)data->length) {
-            return {nullptr,0};
+        if (!data || index < 0 || index >= static_cast<int64_t>(data->length)) {
+            return {};
         }
-        if(data->nChildren<=0){
 
-            // String
+        if (data->nChildren <= 0) {
+
+            // String-like / variable-length data
             if (data->offsetBuffer && data->valueBuffer)
             {
-                int64_t *offsetBuffer_ptr = static_cast<int64_t *>(data->offsetBuffer->get());
-                int64_t start = offsetBuffer_ptr[index];
-                int64_t end = offsetBuffer_ptr[index + 1];
-                T *ptr = (static_cast<T *>(data->valueBuffer->get()) + start);
-                return {ptr, (size_t)(end - start)};
+                auto* offsets = static_cast<int64_t*>(data->offsetBuffer->get());
+
+                int64_t start = offsets[index];
+                int64_t end   = offsets[index + 1];
+
+                auto* base = static_cast<T*>(data->valueBuffer->get());
+                auto* ptr  = base + start;
+
+                return View<T>(
+                    ptr,
+                    static_cast<size_t>(end - start),
+                    data->valueBuffer       // keep value buffer alive
+                );
             }
-            //primitive
-            if (data->valueBuffer) {
-                T *ptr = static_cast<T *>(data->valueBuffer->get());
-                return {&ptr[index], 1}; // Returns a view of length 1 for a single scalar
+
+            // Primitive scalar
+            if (data->valueBuffer)
+            {
+                auto* base = static_cast<T*>(data->valueBuffer->get());
+
+                return View<T>(
+                    base + index,
+                    1,
+                    data->valueBuffer       // keep value buffer alive
+                );
             }
         }
-        else{
-            //AoA
+        else {
+
+            // Array of Arrays
             if (data->offsetBuffer && !data->children.empty())
             {
-                // The flattened data is in the first child
-                auto &dataChild = data->children[0];
+                auto& dataChild = data->children[0];
 
-                if (!dataChild || !dataChild->valueBuffer)
-                    return {nullptr, 0};
+                if (!dataChild || !dataChild->valueBuffer) {
+                    return {};
+                }
 
-                int64_t *offsets = static_cast<int64_t *>(data->offsetBuffer->get());
+                auto* offsets = static_cast<int64_t*>(data->offsetBuffer->get());
+
                 int64_t start = offsets[index];
-                int64_t end = offsets[index + 1];
+                int64_t end   = offsets[index + 1];
 
-                // Pointer arithmetic: Start at the beginning of the child's buffer + the offset
-                T *ptr = static_cast<T *>(dataChild->valueBuffer->get()) + start;
+                auto* base = static_cast<T*>(dataChild->valueBuffer->get());
+                auto* ptr  = base + start;
 
-                // Return the slice (View) of that specific row
-                return {ptr, (size_t)(end - start) };
-            }else
-            {
-                //Struct
-                T *ptr = static_cast<T *>(data->valueBuffer->get());
-                return {&ptr[index], 1};
+                return View<T>(
+                    ptr,
+                    static_cast<size_t>(end - start),
+                    dataChild->valueBuffer  // keep child value buffer alive
+                );
+            }
+            else {
+                // Struct-like fixed-width data
+                if (!data->valueBuffer) {
+                    return {};
+                }
+
+                auto* base = static_cast<T*>(data->valueBuffer->get());
+
+                return View<T>(
+                    base + index,
+                    1,
+                    data->valueBuffer
+                );
             }
         }
-        return {nullptr,0};
+
+        return {};
     }
     void remove_at(std::vector<int64_t> &indices, size_t range)
     {
@@ -1501,6 +1605,66 @@ public:
     // Getter for the Field (Schema)
     std::shared_ptr<ColTableField> getField() const { return field; }
     virtual ~ColTable() = default;
+
+    int64_t get_index(const std::shared_ptr<ColTableData>& node,std::vector<int64_t>& index, size_t layer=0) const{
+        if (!node) {
+            throw std::runtime_error("Null data node");
+        }
+        if (layer >= index.size()) {
+            throw std::runtime_error("Index layer out of range");
+        }
+        if(node->nChildren<=0){
+            if(node->offsetBuffer&&node->valueBuffer){
+                //String
+                index[layer]=static_cast<int64_t*>(node->offsetBuffer.get()->buffer)[index[layer]];
+                if(index.size()>1){
+                    return index[layer-1]+index[layer];
+                }else{
+                    return index[layer];
+                }
+            }
+            else if(node->valueBuffer){
+                //Primitive
+                if(index.size()>1){
+                    return index[layer-1]+index[layer];
+                }
+                else{
+                    return std::accumulate(index.begin(),index.end(),0);   
+                }
+
+            }else{
+                throw std::runtime_error("No value");
+            }
+        }else{
+            if(node->offsetBuffer){
+                //AoA
+                if (layer + 1 >= index.size()) {
+                    throw std::runtime_error("Missing inner index for AoA");
+                }
+
+                if(index[layer]>=node->length){
+                    throw std::runtime_error("out of bound AoA");
+                }
+                index[layer]=static_cast<int64_t*>(node->offsetBuffer.get()->buffer)[index[layer]];
+                if(layer==0){
+                    return get_index(node->children[0],index,layer+1);
+                }else{
+                    index[layer]=index[layer-1]+index[layer];
+                    return get_index(node->children[0],index,layer+1);
+                }
+                
+            }
+            else if(!node->children.empty()){
+                //Struct
+                //Struct has children, and needs to have key, assume the top layer will handle the key and pass the children here no value should be here
+                throw std::runtime_error("Struct should decompose into children before pass to get_index");
+
+            }else{
+                throw std::runtime_error("No value");
+            }
+        }
+        
+    }
 };
 
 // wrapper to map string key for struct variables

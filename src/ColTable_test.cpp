@@ -55,7 +55,7 @@ void TestRoundTrip(const std::string& typeName) {
     // 2. Convert TO the ColTable format
     ColTable table = ColTable::FromVector<T>(original);
     
-    std::vector<int64_t> len_ori={original.size()};
+    std::vector<int64_t> len_ori={static_cast<int64_t>(original.size())};
     table.insert_at(len_ori,add);
     size_t len={add.size()};
     table.remove_at(len_ori,len);
