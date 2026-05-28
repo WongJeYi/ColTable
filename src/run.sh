@@ -12,9 +12,13 @@ find . -name "*.so" -delete
 
 # 2. Configure the project
 # -S . specifies the source (current dir), -B build specifies the output dir
-cmake -S . -B "$BUILD_DIR"\
-    -DPython_EXECUTABLE=$(which python3)    \
+cmake -S . -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -fno-omit-frame-pointer" \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DPython_EXECUTABLE=$(which python3) \
     -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
+
 
 # 3. Build the project
 # -j $(nproc) uses all available CPU cores for a faster build
